@@ -22,6 +22,16 @@ import {
   ChatGptHandoffState,
 } from "./providerSetup.ts";
 import * as Schema from "effect/Schema";
+import {
+  TeamBoard,
+  TeamBoardView,
+  TeamWorkCommand,
+  TeamWorkError,
+  TeamExportInput,
+  TeamExportResult,
+  TeamArtifactInput,
+  TeamArtifactContent,
+} from "./teamWork.ts";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
@@ -513,6 +523,10 @@ export const WS_METHODS = {
   serverRefreshUsageRates: "server.refreshUsageRates",
 
   scheduledTasksList: "scheduledTasks.list",
+  teamWorkList: "teamWork.list",
+  teamWorkExecute: "teamWork.execute",
+  teamWorkExport: "teamWork.export",
+  teamWorkArtifact: "teamWork.artifact",
   scheduledTasksSubscribe: "scheduledTasks.subscribe",
   scheduledTasksUpsert: "scheduledTasks.upsert",
   scheduledTasksSetEnabled: "scheduledTasks.setEnabled",
@@ -1799,6 +1813,27 @@ const WsScheduledTasksListRpc = Rpc.make(WS_METHODS.scheduledTasksList, {
   error: Schema.Union([ScheduledTaskError, EnvironmentAuthorizationError]),
 });
 
+const WsTeamWorkListRpc = Rpc.make(WS_METHODS.teamWorkList, {
+  payload: Schema.Struct({}),
+  success: TeamBoardView,
+  error: Schema.Union([TeamWorkError, EnvironmentAuthorizationError]),
+});
+const WsTeamWorkExecuteRpc = Rpc.make(WS_METHODS.teamWorkExecute, {
+  payload: TeamWorkCommand,
+  success: TeamBoard,
+  error: Schema.Union([TeamWorkError, EnvironmentAuthorizationError]),
+});
+const WsTeamWorkExportRpc = Rpc.make(WS_METHODS.teamWorkExport, {
+  payload: TeamExportInput,
+  success: TeamExportResult,
+  error: Schema.Union([TeamWorkError, EnvironmentAuthorizationError]),
+});
+const WsTeamWorkArtifactRpc = Rpc.make(WS_METHODS.teamWorkArtifact, {
+  payload: TeamArtifactInput,
+  success: TeamArtifactContent,
+  error: Schema.Union([TeamWorkError, EnvironmentAuthorizationError]),
+});
+
 const WsScheduledTasksSubscribeRpc = Rpc.make(WS_METHODS.scheduledTasksSubscribe, {
   payload: ScheduledTaskListInput,
   success: ScheduledTaskListResult,
@@ -1941,6 +1976,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
   WsScheduledTasksListRpc,
+  WsTeamWorkListRpc,
+  WsTeamWorkExecuteRpc,
+  WsTeamWorkExportRpc,
+  WsTeamWorkArtifactRpc,
   WsScheduledTasksSubscribeRpc,
   WsScheduledTasksUpsertRpc,
   WsScheduledTasksSetEnabledRpc,

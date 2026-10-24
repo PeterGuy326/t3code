@@ -25,6 +25,7 @@ import * as Schema from "effect/Schema";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as ServerConfig from "../config.ts";
+import { TeamWorkAdmission } from "../teamWork/admission.ts";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -117,6 +118,7 @@ export const layer: Layer.Layer<
   ProviderTurnStartServiceV2,
   Effect.gen(function* () {
     const eventSink = yield* EventSink.EventSinkV2;
+    const teamWorkAdmission = yield* TeamWorkAdmission;
     const contextHandoffService = yield* ContextHandoffService.ContextHandoffServiceV2;
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const fileSystem = yield* FileSystem.FileSystem;
@@ -1356,6 +1358,11 @@ export const layer: Layer.Layer<
         function* (input) {
           // Storage cleanup removes worktrees under the same lease. Only startup
           // holds it; the provider turn runs after it is released.
+          if (input.threadId.startsWith("team-")) {
+            yield* teamWorkAdmission(input.threadId).pipe(
+              Effect.mapError((cause) => new ProviderTurnStartError({ runId: input.runId, cause })),
+            );
+          }
           const { thread } = yield* projectionStore.getThreadRecords(input.threadId, []);
           const providerTurn = yield* thread.worktreePath === null
             ? start(input)
