@@ -74,18 +74,38 @@ const inputKey = () => {
       { cwd: root, maxBuffer: 1024 * 1024 * 1024 },
     ),
   );
-  const ignored = git(
+  // Collapse ignored directories before filtering. Git's recursive pathspec
+  // scan can enter pnpm junction cycles on Windows even with an exclusion.
+  const ignored: Array<string> = [];
+  const collectIgnored = (file: string) => {
+    const parts = file.split("/").filter(Boolean);
+    if (parts.includes("node_modules")) return;
+    const path = NodePath.join(root, file);
+    const stat = NodeFS.lstatSync(path, { throwIfNoEntry: false });
+    if (!stat || stat.isSymbolicLink()) return;
+    if (stat.isDirectory()) {
+      for (const name of NodeFS.readdirSync(path).sort()) {
+        collectIgnored(`${file.replace(/\/$/, "")}/${name}`);
+      }
+    } else if (
+      stat.isFile() &&
+      (parts.includes(".generated") ||
+        parts.includes(".astro") ||
+        file.endsWith(".d.ts") ||
+        NodePath.basename(file).startsWith(".env"))
+    ) {
+      ignored.push(file);
+    }
+  };
+  for (const entry of git(
     "ls-files",
     "--others",
     "--ignored",
     "--exclude-standard",
-    "--",
-    ":(glob)**/.generated/**",
-    ":(glob)**/.astro/**",
-    ":(glob)**/*.d.ts",
-    ":(glob)**/.env*",
-    ":(exclude,glob)**/node_modules/**",
-  );
+    "--directory",
+  )) {
+    collectIgnored(entry);
+  }
   for (const file of [
     // Raw bytes of changed files too: .gitattributes normalizes line endings in
     // the diff, but the formatter reads the file as it is on disk.
