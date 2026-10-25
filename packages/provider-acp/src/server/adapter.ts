@@ -224,6 +224,7 @@ class AcpModelSelectionError extends Schema.TaggedError<AcpModelSelectionError>(
 }
 
 export interface AcpAdapterV2Flavor {
+  readonly emptyResponseError?: string;
   readonly promptFailure?: (cause: unknown) => OrchestrationV2ProviderFailure;
   readonly driver: ProviderDriverKind;
   readonly capabilities: OrchestrationV2ProviderCapabilities;
@@ -7577,6 +7578,18 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                           ? "interrupted"
                           : "cancelled"
                         : "completed";
+                    if (
+                      status === "completed" &&
+                      flavor.emptyResponseError !== undefined &&
+                      context.assistant.current === null &&
+                      context.assistant.nextSegment === 0 &&
+                      context.tools.size === 0
+                    ) {
+                      return yield* new EffectAcpErrors.AcpRequestError({
+                        code: -32603,
+                        errorMessage: flavor.emptyResponseError,
+                      });
+                    }
                     if (flavor.deferFinalizeForBackgroundWork === true && !context.interrupted) {
                       context.promptSettled = true;
                       context.promptSettledStatus = status;

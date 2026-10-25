@@ -45,6 +45,7 @@ import { makeAcpNativeLoggerFactory } from "@t3tools/provider-acp/server/nativeL
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import { hermesAcpFatalError } from "./hermesAcp.ts";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import {
   ProviderAdapterDriverCreateError,
@@ -64,6 +65,10 @@ export const ACP_REGISTRY_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(ACP_R
 
 const DEFAULT_ACP_REGISTRY_SETTINGS = Schema.decodeSync(AcpRegistrySettings)({});
 const isAcpRequestError = Schema.is(EffectAcpErrors.AcpRequestError);
+
+const isHermesSettings = (settings: AcpRegistrySettings) =>
+  settings.agentId === "hermes" ||
+  /^hermes(?:-acp)?(?:\.exe|\.cmd)?$/iu.test(settings.commandPath.split(/[\\/]/u).pop() ?? "");
 
 export interface AcpRegistryAdapterV2Options {
   readonly instanceId: Parameters<typeof makeAcpAdapterV2>[0]["instanceId"];
@@ -142,6 +147,8 @@ function makeAcpRegistryRuntime(
   > =>
     Effect.gen(function* () {
       const { processEnvironment, ...runtimeInput } = input;
+      const isHermes = isHermesSettings(options.settings);
+      let stderrTail = "";
       const resolved = yield* catalog
         .resolve(options.settings, input.cwd, options.environment)
         .pipe(
@@ -156,6 +163,16 @@ function makeAcpRegistryRuntime(
       const context = yield* Layer.build(
         AcpSessionRuntime.layer({
           ...runtimeInput,
+          ...(isHermes
+            ? {
+                onStderr: (chunk: string) =>
+                  Effect.suspend(() => {
+                    stderrTail = (stderrTail + chunk).slice(-2_048);
+                    const failure = hermesAcpFatalError(stderrTail);
+                    return failure ? Effect.fail(failure) : Effect.void;
+                  }),
+              }
+            : {}),
           spawn:
             processEnvironment === undefined
               ? resolved.spawn
@@ -210,6 +227,14 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
   const copilotRouting = isCopilot ? makeCopilotSubagentRouting() : undefined;
   const flavor: AcpAdapterV2Flavor = {
     driver: ACP_REGISTRY_PROVIDER,
+    // Legacy Hermes can return end_turn after a rejected inference request,
+    // suppressing even its stderr in quiet mode. Reasoning alone is not output.
+    ...(isHermesSettings(options.settings)
+      ? {
+          emptyResponseError:
+            "Hermes returned no response or tool results. Check the model provider and authentication configuration, then retry.",
+        }
+      : {}),
     capabilities: AcpProviderCapabilitiesV2,
     customModels: readCustomModelEntries(options.settings.customModels).map((entry) => entry.slug),
     promptFailure: (cause) => acpRegistryPromptFailure(registryAgentId, cause),

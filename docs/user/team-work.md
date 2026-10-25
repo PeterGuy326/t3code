@@ -24,4 +24,14 @@ Choose **导出到 Obsidian** to write a revision snapshot under the selected pr
 
 The workbench owns task and execution status. Editing an exported Markdown file does not start an agent or complete a task. Exports use revision directories; edited snapshots are preserved and reported as conflicts. Existing personal notes remain separate. Obsidian and community plugins are optional.
 
-This first version adds the workbench to the web client and the desktop client that wraps it. Native mobile keeps its existing T3 features. RoleWeave workspace migration, legacy CLI history import, cross-device scheduling, automatic delivery discovery and per-provider budget enforcement are not included yet. Hermes and Qoder require a supported T3 provider or a separately implemented adapter; their presence on the machine does not establish support.
+## Use Hermes and Qoder teams
+
+In **Settings → Providers → Add instance**, choose **Hermes CLI** or **Qoder CLI**. These use the installed CLI through ACP: `hermes acp` or `qodercli --acp`. The executable and arguments are editable. Qoder installations that expose the CLI as `qoder` can use that executable instead; the Qoder IDE launcher is a different program. Each instance keeps its own identity, discovered models and approval requests.
+
+Select the environment where the CLI is installed and signed in. For Windows clients using Linux installations, enable the distro under **Settings → Connections → WSL backend**, then add the providers in that WSL environment. The Windows installer includes a Linux runtime, so its backend does not depend on the version of Node selected in your shell. The distro, Git and the agent CLIs must already be installed.
+
+Hermes uses its own model configuration and credentials. An empty response from older Hermes releases is reported as a failed execution, rather than a successful delivery. If you want a separate Hermes profile, set `HERMES_HOME` in that provider instance's environment variables and configure the model in that profile. No credentials are bundled with the installer.
+
+The personal desktop distribution uses `~/.t3-teamwork` on each operating system and its own Chromium profile. It can be installed alongside the original T3. An explicit `T3CODE_HOME` still selects a different Windows backend directory.
+
+This version adds the workbench to the web client and the desktop client that wraps it. Native mobile keeps its existing T3 features. RoleWeave workspace migration, legacy CLI history import, cross-device scheduling, automatic delivery discovery and per-provider budget enforcement are not included yet.

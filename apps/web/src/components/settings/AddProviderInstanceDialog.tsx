@@ -275,17 +275,21 @@ export function AddProviderInstanceDialog({
     setHasAttemptedSubmit(false);
   };
 
-  const handleLocalAcpConfiguration = () => {
+  const handleLocalAcpConfiguration = (preset?: "Hermes" | "Qoder") => {
     setDriver(ACP_REGISTRY_DRIVER_KIND);
     setSelectedAcp(null);
     setIsManualAcpConfiguration(true);
     setConfigByDriver((existing) => ({
       ...existing,
-      [ACP_REGISTRY_DRIVER_KIND]: { source: "local", commandArgs: [] },
+      [ACP_REGISTRY_DRIVER_KIND]: {
+        source: "local",
+        ...(preset ? { commandPath: preset === "Hermes" ? "hermes" : "qodercli" } : {}),
+        commandArgs: preset === "Hermes" ? ["acp"] : preset === "Qoder" ? ["--acp"] : [],
+      },
     }));
     setIdentityByDriver((existing) =>
       updateProviderIdentityDraft(existing, ACP_REGISTRY_DRIVER_KIND, {
-        label: "Local ACP",
+        label: preset ?? "Local ACP",
         instanceIdOverride: null,
       }),
     );
@@ -448,6 +452,22 @@ export function AddProviderInstanceDialog({
 
               {wizardStep === 0 ? (
                 <div className="space-y-4 pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    {(["Hermes", "Qoder"] as const).map((preset) => (
+                      <Button
+                        key={preset}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleLocalAcpConfiguration(preset)}
+                      >
+                        {preset} CLI
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Use the CLI installed and signed in on {environmentLabel}. For CLIs installed in
+                    WSL, select the WSL environment first. Commands and arguments remain editable.
+                  </p>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <div aria-hidden className="flex-1 border-t border-border/70" />
                     <span>Or choose from ACP Registry</span>
@@ -503,7 +523,7 @@ export function AddProviderInstanceDialog({
                         providerInstances={settings.providerInstances}
                         onPrepared={handleAcpPrepared}
                         onManualConfiguration={handleManualAcpConfiguration}
-                        onLocalConfiguration={handleLocalAcpConfiguration}
+                        onLocalConfiguration={() => handleLocalAcpConfiguration()}
                         onLoadingChange={setIsRegistryLoading}
                         onPreparingChange={setIsPreparingRegistryAgent}
                       />

@@ -38,6 +38,18 @@ const makeEnvironment = (
 ) => DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(layerEnvironment(overrides, env)));
 
 describe("DesktopEnvironment", () => {
+  it.effect("keeps the packaged personal backend separate and honors explicit homes", () =>
+    Effect.gen(function* () {
+      const packaged = yield* makeEnvironment({ isPackaged: true });
+      assert.equal(packaged.baseDir, "/Users/alice/.t3-teamwork");
+      assert.equal(packaged.stateDir, "/Users/alice/.t3-teamwork/userdata");
+      const explicit = yield* makeEnvironment(
+        { isPackaged: true },
+        { T3CODE_HOME: "/test/isolated" },
+      );
+      assert.equal(explicit.baseDir, "/test/isolated");
+    }),
+  );
   it.effect("uses the packaged Windows server sidecar as the backend root", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment({

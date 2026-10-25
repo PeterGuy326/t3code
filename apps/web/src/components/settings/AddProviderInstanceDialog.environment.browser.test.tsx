@@ -247,6 +247,33 @@ describe("AddProviderInstanceDialog environment routing", () => {
     expect(signInStep()).toBeNull();
   });
 
+  it.each(["Hermes", "Qoder"])(
+    "adds the installed %s CLI to the selected environment",
+    async (name) => {
+      setup();
+      await using _screen = await render(dialog());
+      await click(`${name} CLI`);
+      await click("Next");
+      await click("Add instance");
+      expect(settingsHooks.mutate).toHaveBeenCalledWith({
+        operation: "create",
+        instanceId: `acpRegistry_${name.toLowerCase()}`,
+        instance: {
+          driver: "acpRegistry",
+          enabled: true,
+          displayName: name,
+          config: {
+            source: "local",
+            commandPath: name === "Hermes" ? "hermes" : "qodercli",
+            commandArgs: name === "Hermes" ? ["acp"] : ["--acp"],
+          },
+        },
+      });
+      expect(settingsHooks.useMutation).toHaveBeenCalledWith(remoteEnvironmentId);
+      expect(signInStep()).toBeNull();
+    },
+  );
+
   it("rejects a queued save after the provider grant is revoked", async () => {
     setup();
     await using screen = await prepareCodexInstance();

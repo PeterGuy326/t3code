@@ -592,9 +592,8 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
     mode: "desktop" as const,
     noBrowser: true,
     port: input.port,
-    // Omit t3Home so the Linux backend uses its own home dir instead of
-    // the Windows-side baseDir (which would be a /mnt/c path and share
-    // the SQLite file with the primary).
+    // The personal distribution owns separate state on each OS.
+    ...(environment.isPackaged ? { t3Home: "~/.t3-teamwork" } : {}),
     host: wslBindHost,
     desktopBootstrapToken: input.bootstrapToken,
     desktopBootstrapSecret: input.bootstrapSecret,

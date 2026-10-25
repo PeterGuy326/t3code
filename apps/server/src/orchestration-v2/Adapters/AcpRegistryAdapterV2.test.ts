@@ -412,6 +412,117 @@ const claudeUnrelatedChildren = [
 ];
 
 describe("AcpRegistryAdapterV2", () => {
+  it.effect.each(["hermes", "other-agent"])(
+    "classifies an empty %s turn without inventing a response",
+    (command) =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-hermes-empty-" });
+        const transcript = yield* decodeAcpReplayTranscript(
+          {
+            provider: ACP_REGISTRY_PROVIDER,
+            protocol: "acp.ndjson-jsonrpc",
+            version: "1",
+            scenario: "hermes-empty-response",
+            entries: [
+              {
+                type: "expect_outbound",
+                frame: { kind: "request", method: "initialize", params: "<any>" },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  kind: "response",
+                  method: "initialize",
+                  result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: { kind: "request", method: "session/new", params: "<any>" },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  kind: "response",
+                  method: "session/new",
+                  result: { sessionId: "hermes-empty" },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: { kind: "request", method: "session/prompt", params: "<any>" },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  kind: "response",
+                  method: "session/prompt",
+                  result: { stopReason: "end_turn" },
+                },
+              },
+            ],
+          },
+          ACP_REGISTRY_PROVIDER,
+        );
+        const instanceId = ProviderInstanceId.make("hermes-empty");
+        const adapter = yield* makeAcpRegistryAdapterV2({
+          instanceId,
+          selfInvocation: yield* resolveSelfInvocation(),
+          settings: yield* decodeAcpRegistryAdapterSettings({
+            source: "local",
+            commandPath: command,
+            commandArgs: ["acp"],
+          }),
+          environment: {},
+          makeRuntime: makeAcpReplayRuntime({
+            transcript,
+            statusPath: path.join(directory, "status.json"),
+            scriptPath: yield* path.fromFileUrl(
+              new URL("../../../scripts/acp-replay-agent.ts", import.meta.url),
+            ),
+            childProcessSpawner,
+            fileSystem,
+          }),
+        }).pipe(Effect.provide(layerInjectedRuntimeCatalog));
+        const threadId = ThreadId.make("thread-hermes-empty");
+        const modelSelection = { instanceId, model: "default" } as const;
+        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "approval-required",
+          interactionMode: "default",
+          cwd: directory,
+        });
+        const runtime = yield* adapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make("session-hermes-empty"),
+          modelSelection,
+          runtimePolicy,
+        });
+        const providerThread = yield* runtime.ensureThread({
+          threadId,
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* runtime.startTurn(
+          makeTurnInput({
+            threadId,
+            providerThread,
+            instanceId,
+            runtimePolicy,
+            now: yield* DateTime.now,
+          }),
+        );
+        const events = yield* runtime.events.pipe(
+          Stream.takeUntil((event) => event.type === "turn.terminal"),
+          Stream.runCollect,
+        );
+        const terminal = events.findLast((event) => event.type === "turn.terminal");
+        assert.equal(terminal?.status, command === "hermes" ? "failed" : "completed");
+        if (command === "hermes") assert.include(terminal?.failure?.message, "no response");
+      }).pipe(Effect.provide(layerTest), Effect.scoped),
+  );
   it("preserves and sanitizes structured ACP errors without exposing arbitrary defects", () => {
     const limit = new EffectAcpErrors.AcpRequestError({
       code: -31001,
