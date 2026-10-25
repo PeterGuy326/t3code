@@ -296,7 +296,12 @@ const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
 );
 const layerTeamWorkProvided = TeamWorkService.layer.pipe(
   Layer.provide(
-    Layer.mergeAll(layerThreadLaunchProvided, ProjectStore.layer, ProjectionStore.layer),
+    Layer.mergeAll(
+      layerThreadLaunchProvided,
+      layerThreadManagementProvided,
+      ProjectStore.layer,
+      ProjectionStore.layer,
+    ),
   ),
 );
 const layerProviderContinuationWorkerProvided = ProviderContinuationService.layer.pipe(

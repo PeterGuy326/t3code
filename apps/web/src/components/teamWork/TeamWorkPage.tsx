@@ -8,6 +8,7 @@ import {
   type TeamBoard,
   type TeamTask,
   type TeamWorkCommand,
+  type TeamWorkspace,
 } from "@t3tools/contracts";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { useProjects, useThreadShells } from "../../state/entities";
@@ -325,9 +326,32 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                   <h2 className="text-lg font-semibold">{selected.title}</h2>
                   <Badge variant="secondary">{selected.owner}</Badge>
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm">{selected.objective}</p>
+                <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm">
+                  {selected.objective}
+                </p>
+                <CampaignControls
+                  key={selected.id}
+                  scope={selected}
+                  board={board}
+                  environmentId={environmentId}
+                  providers={providers}
+                  disabled={busy || !canOperate}
+                  submit={submit}
+                  ownerBusy={
+                    query.data?.owners.find((item) => item.workspaceId === selected.id)?.active ??
+                    false
+                  }
+                  ownerStatus={
+                    query.data?.owners.find((item) => item.workspaceId === selected.id)?.status ??
+                    "unknown"
+                  }
+                />
                 <details className="mt-4 text-sm">
                   <summary className="cursor-pointer text-muted-foreground">目标设置</summary>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    知识资料：将 Markdown 放在项目的 notes/ 目录，可用 Obsidian 编辑。Owner
+                    制定计划时读取；本版最多读取目录下 8 篇、共 32 KiB。StaffDeck 检索尚未启用。
+                  </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button
                       variant="outline"
@@ -473,7 +497,7 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
               </details>
               {tasks.length === 0 && (
                 <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                  添加一个任务，开始推进。
+                  让 Owner 生成团队计划，或手动添加任务。
                 </div>
               )}
               {tasks
@@ -516,13 +540,17 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                           {stages[current.stage]}
                         </Badge>
                       </div>
-                      {current.requirement !== current.title && (
-                        <p
-                          className={`mt-3 whitespace-pre-wrap text-sm ${expanded === current.id ? "" : "line-clamp-2 text-muted-foreground"}`}
-                        >
-                          {current.requirement}
-                        </p>
-                      )}
+                      {current.requirement !== current.title &&
+                        (expanded === current.id ||
+                          !board.workspaces.some((item) =>
+                            item.coordination?.taskIds.includes(current.id),
+                          )) && (
+                          <p
+                            className={`mt-3 whitespace-pre-wrap text-sm ${expanded === current.id ? "" : "line-clamp-2 text-muted-foreground"}`}
+                          >
+                            {current.requirement}
+                          </p>
+                        )}
                       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         {execution ? (
                           <>
@@ -557,37 +585,40 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                                 : "查看详情"}
                         </Button>
                       </div>
-                      {current.stage === "ready" && (
-                        <form
-                          className="grid gap-3 sm:grid-cols-[1fr_auto]"
-                          onSubmit={(event) =>
-                            formSubmit(event, (form) => {
-                              const [instance, model] = value(form, "model").split("\t");
-                              const provider = providers.find(
-                                (item) => item.instanceId === instance,
-                              )!;
-                              return {
-                                ...metadata(),
-                                type: "task.launch",
-                                actorWorkspaceId,
-                                taskId: current.id,
-                                baseRef: value(form, "baseRef"),
-                                modelSelection: {
-                                  instanceId: provider.instanceId,
-                                  model: model!,
-                                },
-                              };
-                            })
-                          }
-                        >
-                          <AgentChoice providers={providers} />
-                          <div className="flex items-end">
-                            <Button type="submit" disabled={busy || !canOperate}>
-                              开始
-                            </Button>
-                          </div>
-                        </form>
-                      )}
+                      {current.stage === "ready" &&
+                        !board.workspaces.some((item) =>
+                          item.coordination?.taskIds.includes(current.id),
+                        ) && (
+                          <form
+                            className="grid gap-3 sm:grid-cols-[1fr_auto]"
+                            onSubmit={(event) =>
+                              formSubmit(event, (form) => {
+                                const [instance, model] = value(form, "model").split("\t");
+                                const provider = providers.find(
+                                  (item) => item.instanceId === instance,
+                                )!;
+                                return {
+                                  ...metadata(),
+                                  type: "task.launch",
+                                  actorWorkspaceId,
+                                  taskId: current.id,
+                                  baseRef: value(form, "baseRef"),
+                                  modelSelection: {
+                                    instanceId: provider.instanceId,
+                                    model: model!,
+                                  },
+                                };
+                              })
+                            }
+                          >
+                            <AgentChoice providers={providers} />
+                            <div className="flex items-end">
+                              <Button type="submit" disabled={busy || !canOperate}>
+                                开始
+                              </Button>
+                            </div>
+                          </form>
+                        )}
 
                       {expanded === current.id && (
                         <div className="mt-5 grid gap-5 border-t pt-5">
@@ -880,6 +911,25 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                                     <p className="mt-1 text-muted-foreground">
                                       {attempt.createdAt} · 第 {attempt.generation + 1} 轮分工
                                     </p>
+                                    {(attempt.inputDeliveryIds?.length ?? 0) > 0 && (
+                                      <div className="mt-2 grid gap-1">
+                                        <p>本次使用的固定输入</p>
+                                        {board.deliveries
+                                          .filter((item) =>
+                                            attempt.inputDeliveryIds?.includes(item.id),
+                                          )
+                                          .flatMap((item) =>
+                                            item.artifacts.map((artifact) => (
+                                              <p
+                                                className="break-all text-muted-foreground"
+                                                key={artifact.id}
+                                              >
+                                                {artifact.path} · SHA-256 {artifact.digest}
+                                              </p>
+                                            )),
+                                          )}
+                                      </div>
+                                    )}
                                     <Link
                                       to="/$environmentId/$threadId"
                                       params={{ environmentId, threadId: attempt.threadId }}
@@ -935,7 +985,167 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
   );
 }
 
-function AgentChoice({ providers }: { providers: readonly ServerProvider[] }) {
+function CampaignControls({
+  scope,
+  board,
+  environmentId,
+  providers,
+  disabled,
+  submit,
+  ownerBusy,
+  ownerStatus,
+}: {
+  scope: TeamWorkspace;
+  board: TeamBoard;
+  environmentId: EnvironmentId;
+  providers: readonly ServerProvider[];
+  disabled: boolean;
+  ownerBusy: boolean;
+  ownerStatus: string;
+  submit: (command: TeamWorkCommand) => Promise<void>;
+}) {
+  const coordination = scope.coordination;
+  const tasks = board.tasks.filter((item) => coordination?.taskIds.includes(item.id));
+  const delivered = tasks.filter((item) => item.deliveryId !== null).length;
+  const command = (action: "start" | "pause" | "resume" | "reset") =>
+    submit({
+      commandId: randomUUID(),
+      expectedRevision: board.revision,
+      type: "workspace.coordinate",
+      workspaceId: scope.id,
+      action,
+    });
+  if (!coordination)
+    return (
+      <form
+        className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const [instanceId, model] = value(new FormData(event.currentTarget), "model").split("\t");
+          const provider = providers.find((item) => item.instanceId === instanceId);
+          if (!provider || !model) return;
+          void submit({
+            commandId: randomUUID(),
+            expectedRevision: board.revision,
+            type: "workspace.coordinate",
+            workspaceId: scope.id,
+            action: "plan",
+            modelSelection: { instanceId: provider.instanceId, model },
+          });
+        }}
+      >
+        <AgentChoice providers={providers} label="谁来带队" showBaseRef={false} />
+        <div className="flex items-end">
+          <Button disabled={disabled} type="submit">
+            生成团队计划
+          </Button>
+        </div>
+      </form>
+    );
+  const label =
+    ownerStatus === "waiting_approval"
+      ? "Owner 等你批准"
+      : ownerStatus === "waiting_input"
+        ? "Owner 等你回复"
+        : coordination.phase === "planning"
+          ? ownerBusy || coordination.pending
+            ? "Owner 正在制定计划"
+            : "计划已准备，等你确认"
+          : coordination.phase === "running"
+            ? "团队正在推进"
+            : coordination.phase === "paused"
+              ? "已暂停调度"
+              : tasks.every((item) => item.stage === "done")
+                ? "目标已验收"
+                : "交付已准备，等你验收";
+  return (
+    <div className="mt-5 grid gap-3 rounded-lg bg-muted/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">{label}</p>
+        <span className="text-xs text-muted-foreground">
+          {tasks.length} 项分工 · {delivered} 项交付
+        </span>
+      </div>
+      {coordination.note && <p className="text-sm text-muted-foreground">{coordination.note}</p>}
+      {coordination.phase === "planning" && tasks.length > 0 && (
+        <ol className="grid gap-2 text-sm">
+          {tasks.map((item, index) => (
+            <li key={item.id}>
+              {index + 1}. {item.title}
+              <span className="ml-2 text-xs text-muted-foreground">{item.team}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        {coordination.phase === "planning" && (
+          <Button
+            disabled={disabled || ownerBusy || coordination.pending || tasks.length === 0}
+            onClick={() => void command("start")}
+          >
+            确认计划，开始推进
+          </Button>
+        )}
+        {coordination.phase === "running" && (
+          <Button variant="outline" disabled={disabled} onClick={() => void command("pause")}>
+            暂停调度
+          </Button>
+        )}
+        {coordination.phase === "planning" && (
+          <Button variant="outline" disabled={disabled} onClick={() => void command("pause")}>
+            暂停规划
+          </Button>
+        )}
+        {coordination.phase === "paused" && (
+          <Button disabled={disabled || ownerBusy} onClick={() => void command("resume")}>
+            {coordination.approved ? "继续推进" : "继续规划"}
+          </Button>
+        )}
+        {(coordination.phase === "paused" || coordination.phase === "review") && (
+          <Button
+            variant="outline"
+            disabled={disabled || ownerBusy}
+            onClick={() => void command("reset")}
+          >
+            结束本轮，保留历史
+          </Button>
+        )}
+        {coordination.pending && !ownerBusy && (
+          <Button variant="outline" disabled={disabled} onClick={() => void command("resume")}>
+            重试连接
+          </Button>
+        )}
+        {coordination.phase === "planning" &&
+          !coordination.pending &&
+          !ownerBusy &&
+          tasks.length === 0 && (
+            <Button variant="outline" disabled={disabled} onClick={() => void command("resume")}>
+              继续规划
+            </Button>
+          )}
+        {scope.ownerThreadId && (
+          <Link
+            className="text-sm underline"
+            to="/$environmentId/$threadId"
+            params={{ environmentId, threadId: scope.ownerThreadId }}
+          >
+            查看 Owner
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgentChoice({
+  providers,
+  label = "交给谁做",
+  showBaseRef = true,
+}: {
+  providers: readonly ServerProvider[];
+  label?: string;
+  showBaseRef?: boolean;
+}) {
   const available = providers.filter(
     (item) =>
       item.enabled &&
@@ -948,7 +1158,7 @@ function AgentChoice({ providers }: { providers: readonly ServerProvider[] }) {
   const selected = available.find((item) => item.instanceId === chosen) ?? available[0];
   return (
     <>
-      <Field title="交给谁做">
+      <Field title={label}>
         <div className="flex items-center gap-3">
           {selected && (
             <ProviderInstanceIcon
@@ -958,7 +1168,7 @@ function AgentChoice({ providers }: { providers: readonly ServerProvider[] }) {
           )}
           <select
             required
-            aria-label="交给谁做"
+            aria-label={label}
             className={selectClass}
             value={selected?.instanceId ?? ""}
             onChange={(event) => setChosen(event.target.value)}
@@ -995,9 +1205,11 @@ function AgentChoice({ providers }: { providers: readonly ServerProvider[] }) {
               ))}
             </select>
           </Field>
-          <Field title="基础分支">
-            <Input required name="baseRef" defaultValue="HEAD" />
-          </Field>
+          {showBaseRef && (
+            <Field title="基础分支">
+              <Input required name="baseRef" defaultValue="HEAD" />
+            </Field>
+          )}
         </div>
       </details>
     </>

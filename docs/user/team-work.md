@@ -18,7 +18,17 @@ For continuation in the same T3 project, the next agent uses the previous worktr
 
 Human acceptance applies to one specific delivery and requires every criterion to be confirmed. Agent completion and handoff acceptance do not complete the task. A retry keeps history, records a reason and creates a new execution attempt. Predecessors need a current accepted delivery before dependent work starts.
 
+## Let an Owner lead the team
+
+Open **目标与团队**, select a goal, choose who leads it and generate a team plan. The Owner reads your reference notes, checks existing work and proposes up to eight tasks with dependencies and acceptance criteria. Review the plan, then confirm to begin. Independent tasks can run in parallel; a receiving team reuses pinned delivery files. The Owner returns when an execution stops to capture its files and continue the plan. Restarting the server reconciles the saved plan instead of creating a new team.
+
+Within a confirmed team plan, a completed, pinned delivery can feed testing and review before your final acceptance. Ordinary tasks still require accepted predecessors. A team delivery remains pending your acceptance; failed executions do not count as successful inputs. Scheduling pauses after twelve Owner follow-ups, and each task allows two execution attempts before needing your attention. **暂停调度** stops new dispatches; stop an active execution in its conversation. Ending a paused or delivered campaign preserves its task and delivery history and allows a new plan.
+
+The Owner and teams use connected providers with their normal approval requests. Provider execution still depends on its installed CLI and login. StaffDeck retrieval and SOP execution are not enabled in this version.
+
 ## Read the work in Obsidian
+
+Keep original reference notes directly under the project's `notes/` directory and open that directory as an Obsidian vault. The Owner can read up to eight Markdown files, totalling 32 KiB, when planning. Subdirectories and generated task exports are excluded from this initial reference reader. It reads originals with content hashes; it does not synchronize edits into task state or provide semantic search.
 
 Under **目标设置**, choose **导出到 Obsidian** to write a revision snapshot under the selected project's `notes/teamwork-generated/`. Open `notes/` as an Obsidian vault. The export links tasks, deliveries, handoffs and copies of their exact file versions. Exporting the parent includes descendant task records.
 
@@ -36,4 +46,4 @@ Hermes uses its own model configuration and credentials. An empty response from 
 
 The personal desktop distribution uses `~/.t3-teamwork` on each operating system and its own Chromium profile. It can be installed alongside the original T3. An explicit `T3CODE_HOME` still selects a different Windows backend directory.
 
-This version adds the workbench to the web client and the desktop client that wraps it. Native mobile keeps its existing T3 features. RoleWeave workspace migration, legacy CLI history import, cross-device scheduling, automatic delivery discovery and per-provider budget enforcement are not included yet.
+This version adds the workbench to the web client and the desktop client that wraps it. Native mobile keeps its existing T3 features. RoleWeave workspace migration, legacy CLI history import, cross-device scheduling and per-provider budget enforcement are not included yet.

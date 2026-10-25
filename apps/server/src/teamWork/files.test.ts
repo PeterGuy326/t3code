@@ -3,7 +3,35 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { expect, it } from "vite-plus/test";
-import { hash, readArtifact, writeVault } from "./files.ts";
+import { hash, readArtifact, readKnowledge, writeVault } from "./files.ts";
+
+it("reads Obsidian originals with hashes, excluding generated snapshots and oversized context", async () => {
+  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-team-knowledge-"));
+  try {
+    expect((await readKnowledge(root)).notes).toEqual([]);
+    await NodeFSP.mkdir(NodePath.join(root, "notes", "teamwork-generated"), { recursive: true });
+    await NodeFSP.writeFile(
+      NodePath.join(root, "notes", "brief.md"),
+      "Reuse the existing implementation",
+    );
+    await NodeFSP.writeFile(NodePath.join(root, "notes", "large.md"), "x".repeat(33 * 1024));
+    await NodeFSP.writeFile(
+      NodePath.join(root, "notes", "teamwork-generated", "old.md"),
+      "Stale task state",
+    );
+    const result = await readKnowledge(root);
+    expect(result.limited).toBe(true);
+    expect(result.notes).toEqual([
+      {
+        path: "notes/brief.md",
+        text: "Reuse the existing implementation",
+        digest: hash("Reuse the existing implementation"),
+      },
+    ]);
+  } finally {
+    await NodeFSP.rm(root, { recursive: true, force: true });
+  }
+});
 
 it("retains exact bytes after a source artifact is changed or deleted", async () => {
   const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-team-capture-"));

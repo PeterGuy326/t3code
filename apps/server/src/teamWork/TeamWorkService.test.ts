@@ -21,6 +21,7 @@ import type { SqlError } from "effect/sql/SqlError";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadLaunch from "../orchestration-v2/ThreadLaunchService.ts";
+import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as TeamWork from "./TeamWorkService.ts";
 
@@ -64,7 +65,16 @@ function shell(threadId: ThreadId, root: string): OrchestrationV2ThreadShell {
 function fixture(root: string) {
   const shells = new Map<ThreadId, OrchestrationV2ThreadShell>();
   const launches: ThreadLaunch.ThreadLaunchInput[] = [];
+  const ownerMessages: string[] = [];
+  const beforeShellRead = new Map<ThreadId, Effect.Effect<void>>();
   const dependencies = Layer.mergeAll(
+    Layer.mock(ThreadManagement.ThreadManagementService)({
+      dispatch: (command) =>
+        Effect.sync(() => {
+          ownerMessages.push(command.type);
+          return { sequence: 1, storedEvents: [] };
+        }),
+    }),
     Layer.mock(ProjectStore.ProjectStoreV2)({
       get: (projectId) =>
         Effect.succeed(
@@ -87,7 +97,11 @@ function fixture(root: string) {
         ),
     }),
     Layer.mock(ProjectionStore.ProjectionStoreV2)({
-      getThreadShell: (id) => Effect.sync(() => shells.get(id) ?? null),
+      getThreadShell: (id) =>
+        Effect.gen(function* () {
+          yield* beforeShellRead.get(id) ?? Effect.void;
+          return shells.get(id) ?? null;
+        }),
     }),
     Layer.mock(ThreadLaunch.ThreadLaunchService)({
       launch: (input) =>
@@ -122,7 +136,7 @@ function fixture(root: string) {
         }),
     }),
   );
-  return { shells, launches, dependencies, root };
+  return { shells, launches, ownerMessages, beforeShellRead, dependencies, root };
 }
 function scenario(
   run: (
@@ -191,6 +205,262 @@ const seed = Effect.gen(function* () {
     dependsOn: [],
   });
 });
+
+it.live("requires plan approval, preserves launch identity and pauses new dispatches", () =>
+  scenario((context) =>
+    Effect.gen(function* () {
+      const service = yield* TeamWork.TeamWorkService;
+      let board = yield* seed;
+      const plan = {
+        commandId: "plan",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate" as const,
+        workspaceId: "scope",
+        action: "plan" as const,
+        modelSelection: model,
+      };
+      board = yield* service.execute(plan);
+      yield* service.execute(plan);
+      expect(context.launches).toHaveLength(1);
+      expect(context.launches[0]!.threadId).toBe("owner-plan");
+      board = yield* service.execute({
+        commandId: "planned",
+        expectedRevision: board.revision,
+        type: "task.create",
+        actorWorkspaceId: "scope",
+        workspaceId: "scope",
+        taskId: "planned",
+        title: "Implement",
+        requirement: "Write result.md",
+        criteria: ["File exists"],
+        team: "Developer",
+        dependsOn: [],
+      });
+      const launch = {
+        commandId: "worker",
+        expectedRevision: board.revision,
+        type: "task.launch" as const,
+        actorWorkspaceId: "scope",
+        taskId: "planned",
+        modelSelection: model,
+        baseRef: "HEAD",
+      };
+      expect((yield* Effect.result(service.execute(launch)))._tag).toBe("Failure");
+      expect(context.launches).toHaveLength(1);
+      board = yield* service.execute({
+        commandId: "approve",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate",
+        workspaceId: "scope",
+        action: "start",
+      });
+      expect(context.ownerMessages).toHaveLength(1);
+      board = yield* service.execute({
+        commandId: "pause",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate",
+        workspaceId: "scope",
+        action: "pause",
+      });
+      const count = context.launches.length;
+      yield* service.reconcile;
+      expect(context.launches).toHaveLength(count);
+      expect(
+        (yield* Effect.result(service.execute({ ...launch, expectedRevision: board.revision })))
+          ._tag,
+      ).toBe("Failure");
+      board = yield* service.execute({
+        commandId: "resume",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate",
+        workspaceId: "scope",
+        action: "resume",
+      });
+      board = yield* service.execute({ ...launch, expectedRevision: board.revision });
+      const worker = board.tasks.find((item) => item.id === "planned")!;
+      context.shells.set(worker.attempts[0]!.threadId, {
+        ...context.shells.get(worker.attempts[0]!.threadId)!,
+        status: "running",
+      });
+      const activeCount = context.ownerMessages.length;
+      yield* service.reconcile;
+      expect(context.ownerMessages).toHaveLength(activeCount);
+      context.shells.set(worker.attempts[0]!.threadId, {
+        ...context.shells.get(worker.attempts[0]!.threadId)!,
+        status: "completed",
+      });
+      yield* service.reconcile;
+      expect(context.ownerMessages).toHaveLength(activeCount + 1);
+      expect((yield* service.list).board.workspaces[0]!.coordination!.turns).toBe(1);
+      board = (yield* service.list).board;
+      board = yield* service.execute({
+        commandId: "end-pause",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate",
+        workspaceId: "scope",
+        action: "pause",
+      });
+      board = yield* service.execute({
+        commandId: "end",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate",
+        workspaceId: "scope",
+        action: "reset",
+      });
+      expect(board.workspaces[0]!.ownerThreadId).toBeNull();
+      expect(board.workspaces[0]!.coordination).toBeUndefined();
+      expect(board.tasks.find((item) => item.id === "planned")!.attempts).toHaveLength(1);
+    }),
+  ),
+);
+
+it.live("keeps the coordinator alive when a campaign ends during a shell observation", () =>
+  scenario((context) =>
+    Effect.gen(function* () {
+      const service = yield* TeamWork.TeamWorkService;
+      let board = yield* seed;
+      board = yield* service.execute({
+        commandId: "plan",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate",
+        workspaceId: "scope",
+        action: "plan",
+        modelSelection: model,
+      });
+      board = yield* service.execute({
+        commandId: "draft",
+        expectedRevision: board.revision,
+        type: "task.create",
+        actorWorkspaceId: "scope",
+        workspaceId: "scope",
+        taskId: "draft",
+        title: "Draft",
+        requirement: "Write result.md",
+        criteria: ["File correct"],
+        team: "Developer",
+        dependsOn: [],
+      });
+      board = yield* service.execute({
+        commandId: "approve",
+        expectedRevision: board.revision,
+        type: "workspace.coordinate",
+        workspaceId: "scope",
+        action: "start",
+      });
+      const ownerId = board.workspaces[0]!.ownerThreadId!;
+      context.beforeShellRead.set(
+        ownerId,
+        Effect.gen(function* () {
+          context.beforeShellRead.delete(ownerId);
+          const latest = (yield* service.list).board;
+          const paused = yield* service.execute({
+            commandId: "pause",
+            expectedRevision: latest.revision,
+            type: "workspace.coordinate",
+            workspaceId: "scope",
+            action: "pause",
+          });
+          yield* service.execute({
+            commandId: "end",
+            expectedRevision: paused.revision,
+            type: "workspace.coordinate",
+            workspaceId: "scope",
+            action: "reset",
+          });
+        }).pipe(Effect.orDie),
+      );
+      yield* service.reconcile;
+      expect((yield* service.list).board.workspaces[0]!.coordination).toBeUndefined();
+      expect(context.ownerMessages).toHaveLength(1);
+      expect(context.launches).toHaveLength(1);
+    }),
+  ),
+);
+
+it.live(
+  "lets an approved reviewer consume pinned bytes in the original checkout without human acceptance",
+  () =>
+    scenario((context) =>
+      Effect.gen(function* () {
+        const service = yield* TeamWork.TeamWorkService;
+        let board = yield* seed;
+        board = yield* service.execute({
+          commandId: "plan",
+          expectedRevision: board.revision,
+          type: "workspace.coordinate",
+          workspaceId: "scope",
+          action: "plan",
+          modelSelection: model,
+        });
+        for (const [taskId, dependsOn] of [
+          ["dev", []],
+          ["reviewer", ["dev"]],
+          ["audit", ["dev"]],
+        ] as const) {
+          board = yield* service.execute({
+            commandId: `create-${taskId}`,
+            expectedRevision: board.revision,
+            type: "task.create",
+            actorWorkspaceId: "scope",
+            workspaceId: "scope",
+            taskId,
+            title: taskId,
+            requirement: "Reuse result.md",
+            criteria: ["File correct"],
+            team: taskId,
+            dependsOn,
+          });
+        }
+        board = yield* service.execute({
+          commandId: "approve",
+          expectedRevision: board.revision,
+          type: "workspace.coordinate",
+          workspaceId: "scope",
+          action: "start",
+        });
+        const launch = (taskId: string): TeamWorkCommand => ({
+          commandId: `launch-${taskId}`,
+          expectedRevision: board.revision,
+          type: "task.launch",
+          actorWorkspaceId: "scope",
+          taskId,
+          modelSelection: model,
+          baseRef: "HEAD",
+        });
+        expect((yield* Effect.result(service.execute(launch("reviewer"))))._tag).toBe("Failure");
+        board = yield* service.execute(launch("dev"));
+        board = yield* service.execute({
+          commandId: "capture",
+          expectedRevision: board.revision,
+          type: "task.deliver",
+          actorWorkspaceId: "scope",
+          taskId: "dev",
+          attemptId: "launch-dev",
+          summary: "Implemented",
+          paths: ["result.md"],
+          checks: ["File checked"],
+          remaining: [],
+        });
+        expect(board.acceptances).toHaveLength(0);
+        board = yield* service.execute(launch("reviewer"));
+        expect(context.launches.at(-1)!.workspaceStrategy).toEqual({
+          type: "existing_worktree",
+          worktreePath: context.root,
+        });
+        expect(board.tasks.find((item) => item.id === "dev")!.stage).toBe("review");
+        const delivery = board.deliveries[0]!;
+        const pinned = yield* service.artifact({ artifactId: delivery.artifacts[0]!.id });
+        expect(Buffer.from(pinned.base64, "base64").toString()).toBe("Reusable implementation\n");
+        expect(board.tasks.find((item) => item.id === "reviewer")!.attempts[0]!.briefing).toContain(
+          delivery.artifacts[0]!.digest,
+        );
+        expect(
+          board.tasks.find((item) => item.id === "reviewer")!.attempts[0]!.inputDeliveryIds,
+        ).toEqual([delivery.id]);
+        expect((yield* Effect.result(service.execute(launch("audit"))))._tag).toBe("Failure");
+      }),
+    ),
+);
 
 it.live("preserves cancelled work for a successor without inventing a successful execution", () =>
   scenario((context) =>

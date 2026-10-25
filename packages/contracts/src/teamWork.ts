@@ -11,6 +11,17 @@ const Id = TrimmedNonEmptyString.check(
 const TextList = Schema.Array(Text).check(Schema.isMaxLength(64));
 const IdList = Schema.Array(Id).check(Schema.isMaxLength(64));
 
+export const TeamCoordination = Schema.Struct({
+  phase: Schema.Literals(["planning", "running", "paused", "review"]),
+  approved: Schema.Boolean,
+  modelSelection: ModelSelection,
+  taskIds: IdList,
+  turns: NonNegativeInt,
+  dispatchId: Id,
+  pending: Schema.Boolean,
+  note: Schema.String,
+});
+
 export const TeamWorkspace = Schema.Struct({
   id: Id,
   projectId: ProjectId,
@@ -19,6 +30,7 @@ export const TeamWorkspace = Schema.Struct({
   objective: Text,
   owner: Text,
   ownerThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  coordination: Schema.optional(TeamCoordination),
 });
 export type TeamWorkspace = typeof TeamWorkspace.Type;
 
@@ -33,6 +45,7 @@ export const TeamAttempt = Schema.Struct({
   launchState: Schema.Literals(["pending", "started", "unknown"]),
   modelSelection: ModelSelection,
   baseRef: Text,
+  inputDeliveryIds: Schema.optional(IdList),
 });
 export type TeamAttempt = typeof TeamAttempt.Type;
 
@@ -113,6 +126,9 @@ export const TeamBoard = Schema.Struct({
 export type TeamBoard = typeof TeamBoard.Type;
 export const TeamBoardView = Schema.Struct({
   board: TeamBoard,
+  owners: Schema.Array(
+    Schema.Struct({ workspaceId: Id, status: Schema.String, active: Schema.Boolean }),
+  ),
   executions: Schema.Array(
     Schema.Struct({
       taskId: Id,
@@ -126,11 +142,35 @@ export const TeamBoardView = Schema.Struct({
 });
 export type TeamBoardView = typeof TeamBoardView.Type;
 
+export const TeamExecutionInput = Schema.Struct({ taskId: Id });
+export const TeamExecutionResult = Schema.Struct({
+  threadId: Schema.NullOr(ThreadId),
+  checkoutRoot: Schema.NullOr(Schema.String),
+  status: Schema.String,
+  active: Schema.Boolean,
+  finalText: Schema.String,
+});
+export const TeamKnowledgeInput = Schema.Struct({ workspaceId: Id });
+export const TeamKnowledgeResult = Schema.Struct({
+  directory: Schema.String,
+  notes: Schema.Array(
+    Schema.Struct({ path: Schema.String, digest: Schema.String, text: Schema.String }),
+  ),
+  limited: Schema.Boolean,
+});
+
 const Command = {
   commandId: Id.check(Schema.isMaxLength(96)),
   expectedRevision: NonNegativeInt,
 };
 export const TeamWorkCommand = Schema.Union([
+  Schema.Struct({
+    ...Command,
+    type: Schema.Literal("workspace.coordinate"),
+    workspaceId: Id,
+    action: Schema.Literals(["plan", "start", "pause", "resume", "reset"]),
+    modelSelection: Schema.optional(ModelSelection),
+  }),
   Schema.Struct({ ...Command, type: Schema.Literal("workspace.create"), workspace: TeamWorkspace }),
   Schema.Struct({
     ...Command,

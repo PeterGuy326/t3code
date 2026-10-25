@@ -8,6 +8,22 @@ import { TeamWorkToolkit } from "./tools.ts";
 const failure = (cause: { readonly message: string }) =>
   new OrchestratorMcpFailure({ code: "invalid_request", message: cause.message });
 export const layer = McpToolAccess.toLayer(TeamWorkToolkit, {
+  team_work_execution: McpToolAccess.reads((input) =>
+    Effect.gen(function* () {
+      yield* readCaller();
+      return yield* (yield* TeamWork.TeamWorkService)
+        .execution(input)
+        .pipe(Effect.mapError(failure));
+    }),
+  ),
+  team_work_knowledge: McpToolAccess.reads((input) =>
+    Effect.gen(function* () {
+      yield* readCaller();
+      return yield* (yield* TeamWork.TeamWorkService)
+        .knowledge(input)
+        .pipe(Effect.mapError(failure));
+    }),
+  ),
   team_work_list: McpToolAccess.reads(() =>
     Effect.gen(function* () {
       yield* readCaller();
@@ -28,7 +44,8 @@ export const layer = McpToolAccess.toLayer(TeamWorkToolkit, {
       if (
         input.type === "delivery.accept" ||
         input.type === "workspace.create" ||
-        input.type === "workspace.update"
+        input.type === "workspace.update" ||
+        input.type === "workspace.coordinate"
       ) {
         return yield* new OrchestratorMcpFailure({
           code: "capability_denied",

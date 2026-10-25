@@ -1,5 +1,6 @@
 import {
   TeamWorkError,
+  ThreadId,
   type TeamBoard,
   type TeamTask,
   type TeamWorkCommand,
@@ -51,15 +52,40 @@ export function replaceTask(board: TeamBoard, updated: TeamTask): TeamBoard {
   return { ...board, tasks: board.tasks.map((item) => (item.id === updated.id ? updated : item)) };
 }
 
+export function inputDeliveryId(board: TeamBoard, current: TeamTask) {
+  return (
+    current.deliveryId ??
+    current.dependsOn
+      .flatMap((id) => {
+        const deliveryId = task(board, id).deliveryId;
+        return deliveryId ? [deliveryId] : [];
+      })
+      .at(-1)
+  );
+}
+
 export function requireDependencies(board: TeamBoard, current: TeamTask) {
+  const coordination = board.workspaces.find((item) =>
+    item.coordination?.taskIds.includes(current.id),
+  )?.coordination;
   for (const id of current.dependsOn) {
     const predecessor = task(board, id);
+    const campaignInput =
+      coordination?.approved &&
+      coordination.taskIds.includes(current.id) &&
+      coordination.taskIds.includes(id) &&
+      predecessor.stage === "review" &&
+      board.deliveries.some(
+        (item) => item.id === predecessor.deliveryId && item.executionStatus === "completed",
+      );
     if (
-      predecessor.stage !== "done" ||
-      predecessor.deliveryId === null ||
-      !board.acceptances.some(
-        (item) => item.taskId === id && item.deliveryId === predecessor.deliveryId && item.accepted,
-      )
+      !campaignInput &&
+      (predecessor.stage !== "done" ||
+        predecessor.deliveryId === null ||
+        !board.acceptances.some(
+          (item) =>
+            item.taskId === id && item.deliveryId === predecessor.deliveryId && item.accepted,
+        ))
     ) {
       reject("invalid", "A predecessor needs an accepted delivery before this task can start.");
     }
@@ -89,7 +115,7 @@ export function makeBriefing(board: TeamBoard, current: TeamTask): string {
     handoff: handoff ?? null,
     deliveries: board.deliveries.filter((item) => deliveryIds.has(item.id)),
   };
-  const text = `Continue this tracked task. Existing deliveries are inputs: inspect and reuse their artifacts before implementing. Retrieve immutable file bytes with team_work_artifact; explain any required rework. Report actual checks, file paths and remaining work in your final response, then end the turn. Do not submit a delivery from an active turn: the source must be stopped before the workbench can fix its file versions. A successful agent turn is not task acceptance.\n\n${JSON.stringify(payload, null, 2)}`;
+  const text = `Continue this tracked task in your CURRENT checkout (process working directory). Original project paths quoted in requirements are historical context: resolve their project-relative files in this checkout, never write into the original project root. Existing deliveries are inputs: inspect and reuse their artifacts before implementing. Retrieve immutable file bytes with team_work_artifact; explain any required rework. Report actual checks, checkout-relative file paths and remaining work in your final response, then end the turn. Do not submit a delivery from an active turn: the source must be stopped before the workbench can fix its file versions. A successful agent turn is not task acceptance.\n\n${JSON.stringify(payload, null, 2)}`;
   if (Buffer.byteLength(text) > 16_000)
     reject("invalid", "The required handoff is too large. Split the task before starting.");
   return text;
@@ -97,6 +123,74 @@ export function makeBriefing(board: TeamBoard, current: TeamTask): string {
 
 export function applyPlanning(board: TeamBoard, command: TeamWorkCommand, now: string): TeamBoard {
   switch (command.type) {
+    case "workspace.coordinate": {
+      const scope = workspace(board, command.workspaceId);
+      const previous = scope.coordination;
+      if (command.action === "reset") {
+        if (previous && !["paused", "review"].includes(previous.phase))
+          reject("invalid", "Pause coordination before ending this campaign.");
+        return {
+          ...board,
+          workspaces: board.workspaces.map((item) => {
+            if (item.id !== scope.id) return item;
+            const { coordination: _coordination, ...rest } = item;
+            return { ...rest, ownerThreadId: null };
+          }),
+        };
+      }
+      if (command.action === "plan" && (previous || !command.modelSelection))
+        reject("invalid", "Choose an owner for a new team plan.");
+      if (command.action !== "plan" && !previous) reject("invalid", "Generate a team plan first.");
+      if (command.action === "start") {
+        if (previous!.approved || previous!.taskIds.length === 0)
+          reject("invalid", "Review a new, non-empty plan before starting.");
+        for (const id of previous!.taskIds) {
+          const planned = task(board, id);
+          if (planned.stage !== "ready" || planned.attempts.length > 0)
+            reject("invalid", "Every planned task must be ready and unstarted.");
+        }
+      }
+      const coordination = previous
+        ? {
+            ...previous,
+            phase:
+              command.action === "pause"
+                ? ("paused" as const)
+                : command.action === "start" || previous.approved
+                  ? ("running" as const)
+                  : ("planning" as const),
+            approved: previous.approved || command.action === "start",
+            dispatchId: previous.pending ? previous.dispatchId : command.commandId,
+            pending: command.action !== "pause",
+            turns: command.action === "pause" ? previous.turns : 0,
+            note: command.action === "pause" ? "已暂停调度；正在执行的任务可在会话中停止。" : "",
+          }
+        : {
+            phase: "planning" as const,
+            approved: false,
+            modelSelection: command.modelSelection!,
+            taskIds: [],
+            turns: 0,
+            dispatchId: command.commandId,
+            pending: true,
+            note: "",
+          };
+      return {
+        ...board,
+        workspaces: board.workspaces.map((item) =>
+          item.id === scope.id
+            ? {
+                ...item,
+                ownerThreadId:
+                  command.action === "plan"
+                    ? ThreadId.make(`owner-${command.commandId}`)
+                    : scope.ownerThreadId,
+                coordination,
+              }
+            : item,
+        ),
+      };
+    }
     case "workspace.create": {
       if (board.workspaces.length >= 128) reject("invalid", "Workspace limit reached.");
       if (
@@ -142,8 +236,24 @@ export function applyPlanning(board: TeamBoard, command: TeamWorkCommand, now: s
         const predecessor = task(board, id);
         requireScope(board, command.actorWorkspaceId, predecessor.workspaceId);
       }
+      const coordination = workspace(board, command.actorWorkspaceId).coordination;
+      if (coordination && (coordination.phase !== "planning" || coordination.taskIds.length >= 8))
+        reject("invalid", "The team plan is frozen or has reached eight tasks.");
       return {
         ...board,
+        workspaces: coordination
+          ? board.workspaces.map((item) =>
+              item.id === command.actorWorkspaceId
+                ? {
+                    ...item,
+                    coordination: {
+                      ...coordination,
+                      taskIds: [...coordination.taskIds, command.taskId],
+                    },
+                  }
+                : item,
+            )
+          : board.workspaces,
         tasks: [
           ...board.tasks,
           {

@@ -8,6 +8,36 @@ import { reject } from "./model.ts";
 export const hash = (bytes: string | Uint8Array) =>
   NodeCrypto.createHash("sha256").update(bytes).digest("hex");
 
+export async function readKnowledge(root: string) {
+  const directory = NodePath.join(root, "notes");
+  const entries = await NodeFSP.readdir(directory, { withFileTypes: true }).catch(
+    (cause: NodeJS.ErrnoException) => {
+      if (cause.code === "ENOENT") return [];
+      throw cause;
+    },
+  );
+  const candidates = entries
+    .filter((item) => item.isFile() && item.name.endsWith(".md"))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const notes: Array<{ path: string; digest: string; text: string }> = [];
+  let bytes = 0;
+  let limited = candidates.length > 8;
+  for (const candidate of candidates.slice(0, 8)) {
+    const note = await readArtifact(root, `notes/${candidate.name}`);
+    if (bytes + note.bytes > 32 * 1024) {
+      limited = true;
+      continue;
+    }
+    bytes += note.bytes;
+    notes.push({
+      path: note.path,
+      digest: note.digest,
+      text: Buffer.from(note.base64, "base64").toString("utf8"),
+    });
+  }
+  return { directory, notes, limited };
+}
+
 export async function readArtifact(root: string, relativePath: string) {
   const normalized = relativePath.replaceAll("\\", "/");
   if (
