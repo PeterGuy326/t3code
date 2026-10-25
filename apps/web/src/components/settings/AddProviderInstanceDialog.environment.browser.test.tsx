@@ -251,8 +251,11 @@ describe("AddProviderInstanceDialog environment routing", () => {
     "adds the installed %s CLI to the selected environment",
     async (name) => {
       setup();
-      await using _screen = await render(dialog());
-      await click(`${name} CLI`);
+      await using screen = await render(dialog());
+      await userEvent.click(screen.getByRole("radio", { name, exact: true }));
+      await expect
+        .element(screen.getByRole("radio", { name, exact: true }))
+        .toHaveAttribute("aria-checked", "true");
       await click("Next");
       await click("Add instance");
       expect(settingsHooks.mutate).toHaveBeenCalledWith({

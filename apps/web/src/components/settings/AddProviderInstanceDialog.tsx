@@ -165,6 +165,13 @@ export function AddProviderInstanceDialog({
   const isLocalAcp = isAcpRegistry && isManualAcpConfiguration && configDraft.source === "local";
   const localCommandPath =
     typeof configDraft.commandPath === "string" ? configDraft.commandPath.trim() : "";
+  const localPreset = isLocalAcp
+    ? localCommandPath === "hermes"
+      ? "Hermes"
+      : localCommandPath === "qodercli"
+        ? "Qoder"
+        : undefined
+    : undefined;
   const manualAgentId = typeof configDraft.agentId === "string" ? configDraft.agentId.trim() : "";
   const acpSelectionError = isLocalAcp
     ? localCommandPath.length > 0
@@ -407,8 +414,12 @@ export function AddProviderInstanceDialog({
                 </div>
                 <RadioGroup
                   disabled={isPreparingRegistryAgent}
-                  value={driver}
+                  value={localPreset ? `local:${localPreset}` : driver}
                   onValueChange={(value) => {
+                    if (value === "local:Hermes" || value === "local:Qoder") {
+                      handleLocalAcpConfiguration(value === "local:Hermes" ? "Hermes" : "Qoder");
+                      return;
+                    }
                     setDriver(ProviderDriverKind.make(value));
                     setIsManualAcpConfiguration(false);
                     setHasAttemptedSubmit(false);
@@ -416,59 +427,50 @@ export function AddProviderInstanceDialog({
                   aria-labelledby="add-instance-driver-label"
                   className="grid grid-cols-1 sm:grid-cols-2"
                 >
-                  {providerClients.definitions
-                    .filter((option) => option.driverKind !== ACP_REGISTRY_DRIVER_KIND)
-                    .map((option) => {
-                      return (
-                        <RadioPrimitive.Root
-                          key={option.driverKind}
-                          value={option.driverKind}
-                          className="relative flex cursor-pointer items-center gap-3 rounded-lg bg-card px-3 py-3 text-left text-muted-foreground outline-none ring-1 ring-black/5 hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-checked:bg-primary/8 data-checked:text-foreground data-checked:ring-2 data-checked:ring-inset data-checked:ring-primary data-checked:hover:bg-primary/8 dark:bg-white/3 dark:ring-white/5 dark:hover:bg-white/5 dark:data-checked:bg-primary/15 dark:data-checked:ring-primary dark:data-checked:hover:bg-primary/15"
+                  {[
+                    ...providerClients.definitions
+                      .filter((option) => option.driverKind !== ACP_REGISTRY_DRIVER_KIND)
+                      .map((option) => ({ ...option, choice: option.driverKind })),
+                    ...(["Hermes", "Qoder"] as const).map((label) => ({
+                      choice: `local:${label}`,
+                      driverKind: ACP_REGISTRY_DRIVER_KIND,
+                      label,
+                      badgeLabel: undefined,
+                    })),
+                  ].map((option) => {
+                    return (
+                      <RadioPrimitive.Root
+                        key={option.choice}
+                        value={option.choice}
+                        className="relative flex cursor-pointer items-center gap-3 rounded-lg bg-card px-3 py-3 text-left text-muted-foreground outline-none ring-1 ring-black/5 hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-checked:bg-primary/8 data-checked:text-foreground data-checked:ring-2 data-checked:ring-inset data-checked:ring-primary data-checked:hover:bg-primary/8 dark:bg-white/3 dark:ring-white/5 dark:hover:bg-white/5 dark:data-checked:bg-primary/15 dark:data-checked:ring-primary dark:data-checked:hover:bg-primary/15"
+                      >
+                        <ProviderInstanceIcon
+                          driverKind={option.driverKind}
+                          displayName={option.label}
+                          iconClassName="size-4"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                          {option.label}
+                        </span>
+                        <RadioPrimitive.Indicator
+                          className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
+                          aria-hidden
                         >
-                          <ProviderInstanceIcon
-                            driverKind={option.driverKind}
-                            displayName={option.label}
-                            iconClassName="size-4"
-                          />
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                            {option.label}
-                          </span>
-                          <RadioPrimitive.Indicator
-                            className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
-                            aria-hidden
-                          >
-                            <CheckIcon className="size-3.5 shrink-0" />
-                          </RadioPrimitive.Indicator>
-                          {option.badgeLabel ? (
-                            <Badge variant="warning" size="sm">
-                              {option.badgeLabel}
-                            </Badge>
-                          ) : null}
-                        </RadioPrimitive.Root>
-                      );
-                    })}
+                          <CheckIcon className="size-3.5 shrink-0" />
+                        </RadioPrimitive.Indicator>
+                        {option.badgeLabel ? (
+                          <Badge variant="warning" size="sm">
+                            {option.badgeLabel}
+                          </Badge>
+                        ) : null}
+                      </RadioPrimitive.Root>
+                    );
+                  })}
                 </RadioGroup>
               </div>
 
               {wizardStep === 0 ? (
                 <div className="space-y-4 pt-4">
-                  <div className="flex flex-wrap gap-2">
-                    {(["Hermes", "Qoder"] as const).map((preset) => (
-                      <Button
-                        key={preset}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleLocalAcpConfiguration(preset)}
-                      >
-                        <ProviderInstanceIcon
-                          driverKind={ACP_REGISTRY_DRIVER_KIND}
-                          displayName={preset}
-                          iconClassName="size-4"
-                        />
-                        {preset} CLI
-                      </Button>
-                    ))}
-                  </div>
                   <p className="text-xs text-muted-foreground">
                     Use the CLI installed and signed in on {environmentLabel}. For CLIs installed in
                     WSL, select the WSL environment first. Commands and arguments remain editable.
@@ -483,12 +485,14 @@ export function AddProviderInstanceDialog({
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="text-sm font-medium text-foreground">
-                            {isLocalAcp ? "Local ACP command" : "Enter manually"}
+                            {localPreset ?? (isLocalAcp ? "Local ACP command" : "Enter manually")}
                           </h3>
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {isLocalAcp
-                              ? `Run an installed ACP executable on ${environmentLabel}.`
-                              : "Enter an official registry ID and any local executable or auth override."}
+                            {localPreset
+                              ? `Use ${localPreset}'s existing CLI login on ${environmentLabel}.`
+                              : isLocalAcp
+                                ? `Run an installed ACP executable on ${environmentLabel}.`
+                                : "Enter an official registry ID and any local executable or auth override."}
                           </p>
                         </div>
                         <Button
@@ -502,21 +506,26 @@ export function AddProviderInstanceDialog({
                           Search registry
                         </Button>
                       </div>
-                      <SettingsGroup variant="plain">
-                        <ProviderSettingsForm
-                          definition={driverOption}
-                          value={configDraft}
-                          idPrefix="add-provider-acpRegistry-manual"
-                          variant="settings"
-                          onChange={setConfigDraft}
-                        />
-                        {isLocalAcp ? (
-                          <ProviderEnvironmentSection
-                            environment={localEnvironment}
-                            onChange={setLocalEnvironment}
+                      <details open={localPreset ? undefined : true}>
+                        <summary className="cursor-pointer text-xs text-muted-foreground">
+                          Advanced settings
+                        </summary>
+                        <SettingsGroup variant="plain">
+                          <ProviderSettingsForm
+                            definition={driverOption}
+                            value={configDraft}
+                            idPrefix="add-provider-acpRegistry-manual"
+                            variant="settings"
+                            onChange={setConfigDraft}
                           />
-                        ) : null}
-                      </SettingsGroup>
+                          {isLocalAcp ? (
+                            <ProviderEnvironmentSection
+                              environment={localEnvironment}
+                              onChange={setLocalEnvironment}
+                            />
+                          ) : null}
+                        </SettingsGroup>
+                      </details>
                       {isAcpRegistry && hasAttemptedSubmit && acpSelectionError ? (
                         <p className="text-2xs text-destructive">{acpSelectionError}</p>
                       ) : null}
