@@ -34,4 +34,10 @@ Hermes uses its own model configuration and credentials. An empty response from 
 
 The personal desktop distribution uses `~/.t3-teamwork` on each operating system and its own Chromium profile. It can be installed alongside the original T3. An explicit `T3CODE_HOME` still selects a different Windows backend directory.
 
+## Continue in QwenWork
+
+Choose **千问办公** on your goal and copy the connection address. Add it once as a custom MCP connector in the QwenWork desktop client, then approve access in T3. Keep T3 running while the connector is in use. Choose read-only access to inspect tasks and saved artifacts, or supervised access if QwenWork should update tasks. You can revoke the client under T3's connection permissions.
+
+Use **复制接棒指令** to continue the selected goal in QwenWork. The instruction asks it to read current task state and retrieve the saved artifact bytes before doing more work. QwenWork keeps its own account and conversations; it is not a launchable T3 CLI provider. Its local output is not automatically recorded as a T3 delivery. Human acceptance remains in the workbench.
+
 This version adds the workbench to the web client and the desktop client that wraps it. Native mobile keeps its existing T3 features. RoleWeave workspace migration, legacy CLI history import, cross-device scheduling, automatic delivery discovery and per-provider budget enforcement are not included yet.
