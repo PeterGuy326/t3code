@@ -55,6 +55,7 @@ import type {
 import { deriveProviderSettingsFields, ProviderSettingsForm } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
+import { localAcpAgentId } from "../../localAcpBrands";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -807,7 +808,7 @@ export function ProviderInstanceCard({
       accentColor={accentColor}
       acpRegistryAgentId={
         readConfigString(instance.config, "source") === "local"
-          ? undefined
+          ? localAcpAgentId(readConfigString(instance.config, "commandPath"))
           : (readConfigString(instance.config, "agentId") ?? undefined)
       }
       acpRegistryIconUrl={

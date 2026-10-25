@@ -10,6 +10,7 @@ import { ProviderDriverKind } from "@t3tools/contracts";
 import { AntigravityIcon, ClaudeAI, Icon, OpenAI } from "../Icons";
 
 import { cn } from "~/lib/utils";
+import { localAcpBrand } from "../../localAcpBrands";
 import { providerClients } from "../settings/providerDriverMeta";
 import { ProviderPackageIcon } from "./ProviderPackageIcon";
 import {
@@ -85,6 +86,9 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
   const badgeContent = props.badgeContent ?? "initials";
   const iconClassName = cn(props.size === "compact" && "size-3.5", props.iconClassName);
   const isAcpRegistry = props.driverKind === "acpRegistry";
+  const localBrand = isAcpRegistry
+    ? localAcpBrand(props.acpRegistryAgentId, props.displayName)
+    : undefined;
   const acpRegistryIconUrl = resolveProviderInstanceAcpRegistryIconUrl({
     driverKind: props.driverKind,
     agentId: props.acpRegistryAgentId,
@@ -100,7 +104,14 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
       style={accentStyle}
       data-provider-accent-color={accentColor}
     >
-      {isAcpRegistry ? (
+      {localBrand ? (
+        <img
+          src={localBrand.icon}
+          alt=""
+          aria-hidden
+          className={cn("size-5 shrink-0", iconClassName)}
+        />
+      ) : isAcpRegistry ? (
         <AcpRegistryAgentIcon
           className={cn("size-5 rounded-none bg-transparent", iconClassName)}
           fallbackClassName="size-full"

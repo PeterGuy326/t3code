@@ -27,6 +27,7 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { randomUUID } from "../../lib/utils";
 import { Badge } from "../ui/badge";
+import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 
 const stages: Record<TeamTask["stage"], string> = {
   ready: "可开始",
@@ -948,20 +949,28 @@ function AgentChoice({ providers }: { providers: readonly ServerProvider[] }) {
   return (
     <>
       <Field title="交给谁做">
-        <select
-          required
-          aria-label="交给谁做"
-          className={selectClass}
-          value={selected?.instanceId ?? ""}
-          onChange={(event) => setChosen(event.target.value)}
-        >
-          {!selected && <option value="">暂无可用团队，请在设置中连接</option>}
-          {available.map((provider) => (
-            <option key={provider.instanceId} value={provider.instanceId}>
-              {provider.displayName}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          {selected && (
+            <ProviderInstanceIcon
+              driverKind={selected.driver}
+              displayName={selected.displayName ?? selected.instanceId}
+            />
+          )}
+          <select
+            required
+            aria-label="交给谁做"
+            className={selectClass}
+            value={selected?.instanceId ?? ""}
+            onChange={(event) => setChosen(event.target.value)}
+          >
+            {!selected && <option value="">暂无可用团队，请在设置中连接</option>}
+            {available.map((provider) => (
+              <option key={provider.instanceId} value={provider.instanceId}>
+                {provider.displayName}
+              </option>
+            ))}
+          </select>
+        </div>
       </Field>
       <details className="sm:col-span-2 sm:row-start-2">
         <summary className="cursor-pointer text-xs text-muted-foreground">高级设置</summary>

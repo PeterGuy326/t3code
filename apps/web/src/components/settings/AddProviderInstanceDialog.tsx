@@ -460,6 +460,11 @@ export function AddProviderInstanceDialog({
                         size="sm"
                         onClick={() => handleLocalAcpConfiguration(preset)}
                       >
+                        <ProviderInstanceIcon
+                          driverKind={ACP_REGISTRY_DRIVER_KIND}
+                          displayName={preset}
+                          iconClassName="size-4"
+                        />
                         {preset} CLI
                       </Button>
                     ))}
