@@ -36,7 +36,7 @@ The personal desktop distribution uses `~/.t3-teamwork` on each operating system
 
 ## Continue in QwenWork
 
-Choose **千问办公** on your goal and copy the connection address. Add it once as a custom MCP connector in the QwenWork desktop client, then approve access in T3. Keep T3 running while the connector is in use. Choose read-only access to inspect tasks and saved artifacts, or supervised access if QwenWork should update tasks. You can revoke the client under T3's connection permissions.
+Choose **千问办公** on your goal and copy the connection configuration. Import it once with **Connectors → Add → Paste JSON configuration** in the QwenWork desktop client, then approve access in T3. Keep T3 running while the connector is in use. Choose read-only access to inspect tasks and saved artifacts, or supervised access if QwenWork should update tasks. You can revoke the client under T3's connection permissions.
 
 Use **复制接棒指令** to continue the selected goal in QwenWork. The instruction asks it to read current task state and retrieve the saved artifact bytes before doing more work. QwenWork keeps its own account and conversations; it is not a launchable T3 CLI provider. Its local output is not automatically recorded as a T3 delivery. Human acceptance remains in the workbench.
 

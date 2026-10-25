@@ -32,7 +32,7 @@ export function QwenWorkConnection({
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
   const config = mcpUrl
-    ? JSON.stringify({ mcpServers: { "t3-teamwork": { url: mcpUrl } } }, null, 2)
+    ? JSON.stringify({ mcpServers: { "t3-teamwork": { url: mcpUrl, authType: "oauth" } } }, null, 2)
     : "";
   const briefing = `请通过 T3 Teamwork 连接器继续目标「${title}」（工作区 ${workspaceId}）。先调用 team_work_list 读取最新任务、状态、交接说明和交付版本。已有产物必须先通过 team_work_artifact 读取固定版本，核对 SHA-256 并复用，不要根据摘要重新生成。完成后报告使用了哪些产物、还需做什么；需要更新任务时先重新读取 revision，再用 team_work_update。验收是否通过由我在工作台确认。不要启动与本目标无关的任务。`;
 
@@ -67,11 +67,11 @@ export function QwenWorkConnection({
           <DialogPanel>
             <div className="grid gap-4">
               <p className="text-sm">
-                首次使用：在千问办公的「连接器」中添加自定义 MCP，粘贴连接地址并完成授权。
+                首次使用：在千问办公的「连接器 → 添加 → 粘贴 JSON 配置」中导入，再完成授权。
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button disabled={!mcpUrl} onClick={() => void copy(mcpUrl!, "连接地址")}>
-                  复制连接地址
+                <Button disabled={!mcpUrl} onClick={() => void copy(config, "连接配置")}>
+                  复制连接配置
                 </Button>
                 <Button variant="outline" onClick={() => void copy(briefing, "接棒指令")}>
                   复制接棒指令
@@ -99,9 +99,9 @@ export function QwenWorkConnection({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => void copy(config, "连接配置")}
+                        onClick={() => void copy(mcpUrl, "连接地址")}
                       >
-                        复制 JSON 配置
+                        复制连接地址
                       </Button>
                       <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-3 text-xs">
                         {config}

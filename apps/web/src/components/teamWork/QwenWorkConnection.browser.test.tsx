@@ -53,14 +53,21 @@ describe("QwenWork connection", () => {
     setup();
     await using screen = await render(connection());
     await click("千问办公");
-    await click("复制连接地址");
-    expect(mocks.copy).toHaveBeenCalledWith("https://selected.example.test/mcp", "连接地址");
-    await expect.element(screen.getByRole("status")).toHaveTextContent("已复制连接地址");
+    await click("复制连接配置");
+    expect(JSON.parse(mocks.copy.mock.calls.at(-1)![0])).toEqual({
+      mcpServers: {
+        "t3-teamwork": { url: "https://selected.example.test/mcp", authType: "oauth" },
+      },
+    });
+    await expect.element(screen.getByRole("status")).toHaveTextContent("已复制连接配置");
     await click("复制接棒指令");
     const briefing = mocks.copy.mock.calls.at(-1)![0];
     expect(briefing).toContain("goal-a");
     expect(briefing).toContain("team_work_artifact");
     expect(briefing).toContain("不要根据摘要重新生成");
+    await act(async () => document.querySelector("summary")!.click());
+    await click("复制连接地址");
+    expect(mocks.copy).toHaveBeenLastCalledWith("https://selected.example.test/mcp", "连接地址");
   });
 
   it("keeps a failed copy retryable instead of reporting a connected client", async () => {
@@ -68,12 +75,12 @@ describe("QwenWork connection", () => {
     mocks.copy.mockRejectedValue(new Error("unavailable"));
     await using screen = await render(connection());
     await click("千问办公");
-    await click("复制连接地址");
+    await click("复制连接配置");
     await expect
       .element(screen.getByRole("alert"))
       .toHaveTextContent("复制失败，请展开连接信息手动复制。");
     mocks.copy.mockResolvedValue(true);
-    await click("复制连接地址");
-    await expect.element(screen.getByRole("status")).toHaveTextContent("已复制连接地址");
+    await click("复制连接配置");
+    await expect.element(screen.getByRole("status")).toHaveTextContent("已复制连接配置");
   });
 });
