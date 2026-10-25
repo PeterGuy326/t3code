@@ -277,6 +277,18 @@ describe("AddProviderInstanceDialog environment routing", () => {
     },
   );
 
+  it("shows unavailable products in the same provider list without creating runnable instances", async () => {
+    setup();
+    await using screen = await render(dialog());
+    for (const name of [/千问办公.*未接通/u, /WorkBuddy.*未接通/u]) {
+      await expect.element(screen.getByRole("radio", { name })).toBeDisabled();
+    }
+    expect(settingsHooks.mutate).not.toHaveBeenCalled();
+    await expect
+      .element(screen.getByRole("radio", { name: "Codex", exact: true }))
+      .toHaveAttribute("aria-checked", "true");
+  });
+
   it("rejects a queued save after the provider grant is revoked", async () => {
     setup();
     await using screen = await prepareCodexInstance();

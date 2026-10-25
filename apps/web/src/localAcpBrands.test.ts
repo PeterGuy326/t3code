@@ -15,8 +15,8 @@ describe("local ACP product branding", () => {
   });
 
   it("provides bundled product marks for existing default names", () => {
-    for (const label of ["Hermes", "Qoder CLI", "千问办公"]) {
-      expect(localAcpBrand(undefined, label)?.icon).toMatch(/\.svg(?:\?|$)/u);
+    for (const label of ["Hermes", "Qoder CLI", "千问办公", "WorkBuddy"]) {
+      expect(localAcpBrand(undefined, label)?.icon).toMatch(/\.(?:svg|png)(?:\?|$)/u);
     }
   });
 });

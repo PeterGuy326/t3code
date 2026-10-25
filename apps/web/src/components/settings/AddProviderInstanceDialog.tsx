@@ -21,6 +21,7 @@ import {
 
 import { cn } from "../../lib/utils";
 import { normalizeProviderAccentColor } from "../../providerInstances";
+import { agentProviderChoices, type AgentProviderChoice } from "../../agentProviderChoices";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { Button } from "../ui/button";
 import { ChatGptConnectionButton } from "./ChatGptConnectionButton";
@@ -166,11 +167,7 @@ export function AddProviderInstanceDialog({
   const localCommandPath =
     typeof configDraft.commandPath === "string" ? configDraft.commandPath.trim() : "";
   const localPreset = isLocalAcp
-    ? localCommandPath === "hermes"
-      ? "Hermes"
-      : localCommandPath === "qodercli"
-        ? "Qoder"
-        : undefined
+    ? agentProviderChoices.find((choice) => choice.launch?.commandPath === localCommandPath)
     : undefined;
   const manualAgentId = typeof configDraft.agentId === "string" ? configDraft.agentId.trim() : "";
   const acpSelectionError = isLocalAcp
@@ -282,7 +279,8 @@ export function AddProviderInstanceDialog({
     setHasAttemptedSubmit(false);
   };
 
-  const handleLocalAcpConfiguration = (preset?: "Hermes" | "Qoder") => {
+  const handleLocalAcpConfiguration = (preset?: AgentProviderChoice) => {
+    if (preset && !preset.launch) return;
     setDriver(ACP_REGISTRY_DRIVER_KIND);
     setSelectedAcp(null);
     setIsManualAcpConfiguration(true);
@@ -290,13 +288,12 @@ export function AddProviderInstanceDialog({
       ...existing,
       [ACP_REGISTRY_DRIVER_KIND]: {
         source: "local",
-        ...(preset ? { commandPath: preset === "Hermes" ? "hermes" : "qodercli" } : {}),
-        commandArgs: preset === "Hermes" ? ["acp"] : preset === "Qoder" ? ["--acp"] : [],
+        ...(preset?.launch ?? { commandArgs: [] }),
       },
     }));
     setIdentityByDriver((existing) =>
       updateProviderIdentityDraft(existing, ACP_REGISTRY_DRIVER_KIND, {
-        label: preset ?? "Local ACP",
+        label: preset?.label ?? "Local ACP",
         instanceIdOverride: null,
       }),
     );
@@ -414,10 +411,13 @@ export function AddProviderInstanceDialog({
                 </div>
                 <RadioGroup
                   disabled={isPreparingRegistryAgent}
-                  value={localPreset ? `local:${localPreset}` : driver}
+                  value={localPreset ? `local:${localPreset.id}` : driver}
                   onValueChange={(value) => {
-                    if (value === "local:Hermes" || value === "local:Qoder") {
-                      handleLocalAcpConfiguration(value === "local:Hermes" ? "Hermes" : "Qoder");
+                    const preset = agentProviderChoices.find(
+                      (choice) => `local:${choice.id}` === value,
+                    );
+                    if (preset) {
+                      handleLocalAcpConfiguration(preset);
                       return;
                     }
                     setDriver(ProviderDriverKind.make(value));
@@ -430,18 +430,20 @@ export function AddProviderInstanceDialog({
                   {[
                     ...providerClients.definitions
                       .filter((option) => option.driverKind !== ACP_REGISTRY_DRIVER_KIND)
-                      .map((option) => ({ ...option, choice: option.driverKind })),
-                    ...(["Hermes", "Qoder"] as const).map((label) => ({
-                      choice: `local:${label}`,
+                      .map((option) => ({ ...option, choice: option.driverKind, disabled: false })),
+                    ...agentProviderChoices.map((option) => ({
+                      choice: `local:${option.id}`,
                       driverKind: ACP_REGISTRY_DRIVER_KIND,
-                      label,
-                      badgeLabel: undefined,
+                      label: option.label,
+                      disabled: option.launch === null,
+                      badgeLabel: option.launch === null ? "未接通" : undefined,
                     })),
                   ].map((option) => {
                     return (
                       <RadioPrimitive.Root
                         key={option.choice}
                         value={option.choice}
+                        disabled={option.disabled}
                         className="relative flex cursor-pointer items-center gap-3 rounded-lg bg-card px-3 py-3 text-left text-muted-foreground outline-none ring-1 ring-black/5 hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-checked:bg-primary/8 data-checked:text-foreground data-checked:ring-2 data-checked:ring-inset data-checked:ring-primary data-checked:hover:bg-primary/8 dark:bg-white/3 dark:ring-white/5 dark:hover:bg-white/5 dark:data-checked:bg-primary/15 dark:data-checked:ring-primary dark:data-checked:hover:bg-primary/15"
                       >
                         <ProviderInstanceIcon
@@ -459,7 +461,7 @@ export function AddProviderInstanceDialog({
                           <CheckIcon className="size-3.5 shrink-0" />
                         </RadioPrimitive.Indicator>
                         {option.badgeLabel ? (
-                          <Badge variant="warning" size="sm">
+                          <Badge variant={option.disabled ? "secondary" : "warning"} size="sm">
                             {option.badgeLabel}
                           </Badge>
                         ) : null}
@@ -485,11 +487,12 @@ export function AddProviderInstanceDialog({
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="text-sm font-medium text-foreground">
-                            {localPreset ?? (isLocalAcp ? "Local ACP command" : "Enter manually")}
+                            {localPreset?.label ??
+                              (isLocalAcp ? "Local ACP command" : "Enter manually")}
                           </h3>
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {localPreset
-                              ? `Use ${localPreset}'s existing CLI login on ${environmentLabel}.`
+                              ? `Use ${localPreset.label}'s existing CLI login on ${environmentLabel}.`
                               : isLocalAcp
                                 ? `Run an installed ACP executable on ${environmentLabel}.`
                                 : "Enter an official registry ID and any local executable or auth override."}

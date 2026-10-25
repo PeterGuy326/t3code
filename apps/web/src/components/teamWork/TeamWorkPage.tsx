@@ -28,7 +28,6 @@ import { Textarea } from "../ui/textarea";
 import { randomUUID } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { QwenWorkConnection } from "./QwenWorkConnection";
 
 const stages: Record<TeamTask["stage"], string> = {
   ready: "可开始",
@@ -327,13 +326,6 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                   <Badge variant="secondary">{selected.owner}</Badge>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm">{selected.objective}</p>
-                <div className="mt-4">
-                  <QwenWorkConnection
-                    environmentId={environmentId}
-                    workspaceId={selected.id}
-                    title={selected.title}
-                  />
-                </div>
                 <details className="mt-4 text-sm">
                   <summary className="cursor-pointer text-muted-foreground">目标设置</summary>
                   <div className="mt-4 flex flex-wrap gap-2">

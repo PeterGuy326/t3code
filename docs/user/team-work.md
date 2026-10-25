@@ -26,18 +26,14 @@ The workbench owns task and execution status. Editing an exported Markdown file 
 
 ## Use Hermes and Qoder teams
 
-In **Settings → Providers → Add instance**, choose **Hermes CLI** or **Qoder CLI**. These use the installed CLI through ACP: `hermes acp` or `qodercli --acp`. The executable and arguments are editable. Qoder installations that expose the CLI as `qoder` can use that executable instead; the Qoder IDE launcher is a different program. Each instance keeps its own identity, discovered models and approval requests.
+In **Settings → Providers → Add provider**, choose **Hermes** or **Qoder** alongside Codex and Claude. Continue to add the instance; launch settings have defaults under **Advanced settings**. These use the installed CLI through ACP: `hermes acp` or `qodercli --acp`. Qoder installations that expose the CLI as `qoder` can use that executable instead; the Qoder IDE launcher is a different program. Each instance keeps its own identity, discovered models and approval requests.
+
+**千问办公** and **WorkBuddy** appear in the same list as **未接通**. They cannot be selected until an execution adapter is available. Installing their desktop clients or authorizing an external MCP connector does not make them runnable providers in T3.
 
 Select the environment where the CLI is installed and signed in. For Windows clients using Linux installations, enable the distro under **Settings → Connections → WSL backend**, then add the providers in that WSL environment. The Windows installer includes a Linux runtime, so its backend does not depend on the version of Node selected in your shell. The distro, Git and the agent CLIs must already be installed.
 
 Hermes uses its own model configuration and credentials. An empty response from older Hermes releases is reported as a failed execution, rather than a successful delivery. If you want a separate Hermes profile, set `HERMES_HOME` in that provider instance's environment variables and configure the model in that profile. No credentials are bundled with the installer.
 
 The personal desktop distribution uses `~/.t3-teamwork` on each operating system and its own Chromium profile. It can be installed alongside the original T3. An explicit `T3CODE_HOME` still selects a different Windows backend directory.
-
-## Continue in QwenWork
-
-Choose **千问办公** on your goal and copy the connection configuration. Import it once with **Connectors → Add → Paste JSON configuration** in the QwenWork desktop client, then approve access in T3. Keep T3 running while the connector is in use. Choose read-only access to inspect tasks and saved artifacts, or supervised access if QwenWork should update tasks. You can revoke the client under T3's connection permissions.
-
-Use **复制接棒指令** to continue the selected goal in QwenWork. The instruction asks it to read current task state and retrieve the saved artifact bytes before doing more work. QwenWork keeps its own account and conversations; it is not a launchable T3 CLI provider. Its local output is not automatically recorded as a T3 delivery. Human acceptance remains in the workbench.
 
 This version adds the workbench to the web client and the desktop client that wraps it. Native mobile keeps its existing T3 features. RoleWeave workspace migration, legacy CLI history import, cross-device scheduling, automatic delivery discovery and per-provider budget enforcement are not included yet.
