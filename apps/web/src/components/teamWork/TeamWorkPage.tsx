@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { LayersIcon, RefreshCwIcon } from "lucide-react";
 import {
   type EnvironmentId,
+  type ServerProvider,
   type TeamBoard,
   type TeamTask,
   type TeamWorkCommand,
@@ -83,28 +84,30 @@ export function TeamWorkPage() {
         <div className="mx-auto grid max-w-7xl gap-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xl font-semibold">一个目标，多条工作线。</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                每个工作区一个 owner。父工作区协调子工作区，团队围绕产物接棒。
-              </p>
+              <p className="text-xl font-semibold">今天想推进什么？</p>
             </div>
-            <Field title="执行环境">
-              <select
-                className={selectClass}
-                aria-label="执行环境"
-                value={selected?.environmentId ?? ""}
-                onChange={(event) => setChosen(event.target.value)}
-              >
-                <option value="" disabled>
-                  选择环境
-                </option>
-                {environments.map((item) => (
-                  <option key={item.environmentId} value={item.environmentId}>
-                    {item.label}
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground">
+                {selected?.label ?? "连接设置"}
+              </summary>
+              <Field title="运行位置">
+                <select
+                  className={selectClass}
+                  aria-label="执行环境"
+                  value={selected?.environmentId ?? ""}
+                  onChange={(event) => setChosen(event.target.value)}
+                >
+                  <option value="" disabled>
+                    选择环境
                   </option>
-                ))}
-              </select>
-            </Field>
+                  {environments.map((item) => (
+                    <option key={item.environmentId} value={item.environmentId}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </details>
           </div>
           {selected ? (
             <WorkspaceBoard key={selected.environmentId} environmentId={selected.environmentId} />
@@ -219,7 +222,7 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         <aside className="grid content-start gap-4">
           <div className="rounded-xl border bg-card p-4">
-            <h2 className="mb-3 font-medium">工作区与 owner</h2>
+            <h2 className="mb-3 font-medium">我的目标</h2>
             <div className="grid gap-2">
               {board.workspaces.map((item) => (
                 <button
@@ -231,7 +234,6 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                 >
                   <span className="block font-medium">{item.title}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {item.owner} ·{" "}
                     {item.parentId
                       ? `上级：${board.workspaces.find((parent) => parent.id === item.parentId)?.title}`
                       : "总体目标"}
@@ -241,7 +243,7 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
             </div>
           </div>
           <details className="rounded-xl border p-4" open={board.workspaces.length === 0}>
-            <summary className="cursor-pointer text-sm font-medium">创建工作区</summary>
+            <summary className="cursor-pointer text-sm font-medium">新建目标</summary>
             <form
               className="mt-4 grid gap-3"
               onSubmit={(event) =>
@@ -252,15 +254,26 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                     id: randomUUID(),
                     projectId: projects.find((item) => item.id === value(form, "project"))!.id,
                     parentId: value(form, "parent") || null,
-                    title: value(form, "title"),
+                    title:
+                      value(form, "title") ||
+                      projects.find((item) => item.id === value(form, "project"))!.title,
                     objective: value(form, "objective"),
-                    owner: value(form, "owner"),
+                    owner: value(form, "owner") || "我",
                   },
                 }))
               }
             >
-              <Field title="T3 项目">
-                <select required name="project" className={selectClass}>
+              <Field title="项目">
+                <select
+                  required
+                  name="project"
+                  className={selectClass}
+                  defaultValue={
+                    projects.find(
+                      (item) => !board.workspaces.some((scope) => scope.projectId === item.id),
+                    )?.id ?? ""
+                  }
+                >
                   <option value="">选择项目</option>
                   {projects
                     .filter(
@@ -273,27 +286,32 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
                     ))}
                 </select>
               </Field>
-              <Field title="工作区名称">
-                <Input required name="title" />
+              <Field title="想达成什么？">
+                <Textarea required name="objective" placeholder="例如：让客户可以在线预约" />
               </Field>
-              <Field title="Owner">
-                <Input required name="owner" />
-              </Field>
-              <Field title="总体目标">
-                <Textarea required name="objective" />
-              </Field>
-              <Field title="父工作区">
-                <select name="parent" className={selectClass} defaultValue={selected?.id ?? ""}>
-                  <option value="">独立工作区</option>
-                  {board.workspaces.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <details>
+                <summary className="cursor-pointer text-sm text-muted-foreground">更多设置</summary>
+                <div className="mt-3 grid gap-3">
+                  <Field title="名称">
+                    <Input name="title" placeholder="默认使用项目名称" />
+                  </Field>
+                  <Field title="负责人">
+                    <Input name="owner" placeholder="我" />
+                  </Field>
+                  <Field title="上级目标">
+                    <select name="parent" className={selectClass} defaultValue={selected?.id ?? ""}>
+                      <option value="">独立工作区</option>
+                      {board.workspaces.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </details>
               <Button type="submit" disabled={busy || !canOperate}>
-                创建工作区
+                创建目标
               </Button>
             </form>
           </details>
@@ -304,570 +322,675 @@ function WorkspaceBoard({ environmentId }: { environmentId: EnvironmentId }) {
               <div className="rounded-xl border bg-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold">{selected.title}</h2>
-                  <Badge variant="secondary">Owner · {selected.owner}</Badge>
+                  <Badge variant="secondary">{selected.owner}</Badge>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm">{selected.objective}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy || !canExport}
-                    onClick={() => {
-                      setBusy(true);
-                      void exportVault({ environmentId, input: { workspaceId: selected.id } }).then(
-                        (result) => {
+                <details className="mt-4 text-sm">
+                  <summary className="cursor-pointer text-muted-foreground">目标设置</summary>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy || !canExport}
+                      onClick={() => {
+                        setBusy(true);
+                        void exportVault({
+                          environmentId,
+                          input: { workspaceId: selected.id },
+                        }).then((result) => {
                           setBusy(false);
                           if (result._tag === "Success")
-                            setMessage(`已导出 Obsidian 快照：${result.value.directory}`);
+                            setMessage("已导出到项目的 Obsidian 笔记目录。");
                           else setError(formatEnvironmentQueryError(result.cause));
-                        },
-                      );
-                    }}
-                  >
-                    导出到 Obsidian
-                  </Button>
-                </div>
-                <details className="mt-4 text-sm">
-                  <summary className="cursor-pointer text-muted-foreground">
-                    修改 owner 与目标
-                  </summary>
-                  <form
-                    key={selected.id}
-                    className="mt-3 grid gap-3"
-                    onSubmit={(event) =>
-                      formSubmit(event, (form) => ({
-                        ...metadata(),
-                        type: "workspace.update",
-                        workspaceId: selected.id,
-                        owner: value(form, "owner"),
-                        objective: value(form, "objective"),
-                        ownerThreadId:
-                          ownerThreads.find((item) => item.id === value(form, "ownerThread"))?.id ??
-                          null,
-                      }))
-                    }
-                  >
-                    <Field title="Owner">
-                      <Input required name="owner" defaultValue={selected.owner} />
-                    </Field>
-                    <Field title="目标">
-                      <Textarea required name="objective" defaultValue={selected.objective} />
-                    </Field>
-                    <Field title="Owner 的 AI 会话（可选）">
-                      <select
-                        name="ownerThread"
-                        className={selectClass}
-                        defaultValue={selected.ownerThreadId ?? ""}
-                      >
-                        <option value="">由我手动调度</option>
-                        {ownerThreads
-                          .filter((item) => item.projectId === selected.projectId)
-                          .map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.title}
-                            </option>
-                          ))}
-                      </select>
-                    </Field>
-                    <Button type="submit" disabled={busy || !canOperate}>
-                      保存目标
+                        });
+                      }}
+                    >
+                      导出到 Obsidian
                     </Button>
-                  </form>
+                  </div>
+                  <details className="mt-4 text-sm">
+                    <summary className="cursor-pointer text-muted-foreground">
+                      修改目标与负责人
+                    </summary>
+                    <form
+                      key={selected.id}
+                      className="mt-3 grid gap-3"
+                      onSubmit={(event) =>
+                        formSubmit(event, (form) => ({
+                          ...metadata(),
+                          type: "workspace.update",
+                          workspaceId: selected.id,
+                          owner: value(form, "owner"),
+                          objective: value(form, "objective"),
+                          ownerThreadId:
+                            ownerThreads.find((item) => item.id === value(form, "ownerThread"))
+                              ?.id ?? null,
+                        }))
+                      }
+                    >
+                      <Field title="负责人">
+                        <Input required name="owner" defaultValue={selected.owner} />
+                      </Field>
+                      <Field title="目标">
+                        <Textarea required name="objective" defaultValue={selected.objective} />
+                      </Field>
+                      <Field title="Owner 的 AI 会话（可选）">
+                        <select
+                          name="ownerThread"
+                          className={selectClass}
+                          defaultValue={selected.ownerThreadId ?? ""}
+                        >
+                          <option value="">由我手动调度</option>
+                          {ownerThreads
+                            .filter((item) => item.projectId === selected.projectId)
+                            .map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.title}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Button type="submit" disabled={busy || !canOperate}>
+                        保存目标
+                      </Button>
+                    </form>
+                  </details>
                 </details>
               </div>
               <details className="rounded-xl border p-4">
-                <summary className="cursor-pointer font-medium">分派任务</summary>
+                <summary className="cursor-pointer font-medium">添加任务</summary>
                 <form
-                  className="mt-4 grid gap-3 md:grid-cols-2"
+                  className="mt-4 grid gap-3"
                   onSubmit={(event) =>
                     formSubmit(event, (form) => ({
                       ...metadata(),
                       type: "task.create",
                       actorWorkspaceId,
                       taskId: randomUUID(),
-                      workspaceId: value(form, "workspace"),
-                      title: value(form, "title"),
+                      workspaceId: value(form, "workspace") || selected.id,
+                      title:
+                        value(form, "title") ||
+                        value(form, "requirement").split(/\r?\n/)[0]!.slice(0, 80),
                       requirement: value(form, "requirement"),
-                      criteria: lines(form.get("criteria")),
-                      team: value(form, "team"),
+                      criteria: lines(form.get("criteria")).length
+                        ? lines(form.get("criteria"))
+                        : ["按任务要求完成，并提供可验收的产物"],
+                      team: value(form, "team") || "工作团队",
                       dependsOn: form.getAll("dependencies").map(String),
                     }))
                   }
                 >
-                  <Field title="交给工作区">
-                    <select name="workspace" className={selectClass}>
-                      {board.workspaces
-                        .filter((item) => descendants.has(item.id))
-                        .map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.title} · {item.owner}
-                          </option>
-                        ))}
-                    </select>
+                  <Field title="要做什么？">
+                    <Textarea
+                      required
+                      name="requirement"
+                      placeholder="描述任务，团队会带着已有产物继续推进"
+                    />
                   </Field>
-                  <Field title="负责团队">
-                    <Input required name="team" placeholder="例如：实现团队" />
-                  </Field>
-                  <Field title="任务名称">
-                    <Input required name="title" />
-                  </Field>
-                  <Field title="工作要求">
-                    <Textarea required name="requirement" />
-                  </Field>
-                  <Field title="验收条件（每行一条）">
-                    <Textarea required name="criteria" />
-                  </Field>
-                  <Field title="前序任务（可多选）">
-                    <select name="dependencies" multiple className={selectClass}>
-                      {tasks.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+                  <details>
+                    <summary className="cursor-pointer text-sm text-muted-foreground">
+                      更多设置
+                    </summary>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <Field title="所属目标">
+                        <select name="workspace" className={selectClass} defaultValue={selected.id}>
+                          {board.workspaces
+                            .filter((item) => descendants.has(item.id))
+                            .map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.title} · {item.owner}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Field title="负责团队">
+                        <Input name="team" placeholder="工作团队" />
+                      </Field>
+                      <Field title="任务名称">
+                        <Input name="title" placeholder="默认使用任务第一行" />
+                      </Field>
+                      <Field title="验收条件（每行一条）">
+                        <Textarea name="criteria" placeholder="可选，补充你关心的结果" />
+                      </Field>
+                      <Field title="前序任务（可多选）">
+                        <select name="dependencies" multiple className={selectClass}>
+                          {tasks.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.title}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                  </details>
                   <div>
                     <Button type="submit" disabled={busy || !canOperate}>
-                      分派任务
+                      添加任务
                     </Button>
                   </div>
                 </form>
               </details>
               {tasks.length === 0 && (
                 <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                  先分派一个任务。不同任务可以并行推进同一目标。
+                  添加一个任务，开始推进。
                 </div>
               )}
-              {tasks.map((current) => {
-                const execution = query.data?.executions.find((item) => item.taskId === current.id);
-                const latest = current.attempts.at(-1);
-                const delivery = board.deliveries.find((item) => item.id === current.deliveryId);
-                const pending = board.handoffs.find(
-                  (item) => item.taskId === current.id && item.state === "offered",
-                );
-                const assigned = board.workspaces.find(
-                  (item) => item.id === current.assignedWorkspaceId,
-                );
-                return (
-                  <article key={current.id} className="min-w-0 rounded-xl border bg-card p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-medium">{current.title}</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {assigned?.title} · {current.team} · 第 {current.generation + 1} 轮分工
-                        </p>
-                      </div>
-                      <Badge
-                        variant={
-                          current.stage === "done"
-                            ? "success"
-                            : current.stage === "blocked"
-                              ? "warning"
-                              : "secondary"
-                        }
-                      >
-                        {stages[current.stage]}
-                      </Badge>
-                    </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm">{current.requirement}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      {execution ? (
-                        <>
-                          <span>执行：{executionLabels[execution.status] ?? execution.status}</span>
-                          <Link
-                            to="/$environmentId/$threadId"
-                            params={{ environmentId, threadId: execution.threadId }}
-                            className="underline"
-                          >
-                            打开原始会话
-                          </Link>
-                        </>
-                      ) : (
-                        <span>尚未执行</span>
-                      )}
-                      {delivery && <span>交付：{delivery.artifacts.length} 份固定版本产物</span>}
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setExpanded(expanded === current.id ? null : current.id)}
-                      >
-                        {expanded === current.id ? "收起" : "任务、产物与接棒"}
-                      </Button>
-                    </div>
-                    {expanded === current.id && (
-                      <div className="mt-5 grid gap-5 border-t pt-5">
+              {tasks
+                .toSorted(
+                  (left, right) =>
+                    Number(["done", "cancelled"].includes(left.stage)) -
+                    Number(["done", "cancelled"].includes(right.stage)),
+                )
+                .map((current) => {
+                  const execution = query.data?.executions.find(
+                    (item) => item.taskId === current.id,
+                  );
+                  const latest = current.attempts.at(-1);
+                  const delivery = board.deliveries.find((item) => item.id === current.deliveryId);
+                  const pending = board.handoffs.find(
+                    (item) => item.taskId === current.id && item.state === "offered",
+                  );
+                  const assigned = board.workspaces.find(
+                    (item) => item.id === current.assignedWorkspaceId,
+                  );
+                  return (
+                    <article key={current.id} className="min-w-0 rounded-xl border bg-card p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <p className="mb-2 text-sm font-medium">验收条件</p>
-                          <ul className="list-inside list-disc text-sm text-muted-foreground">
-                            {current.criteria.map((criterion) => (
-                              <li key={criterion}>{criterion}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        {current.dependsOn.length > 0 && (
-                          <p className="text-sm">
-                            前序：
-                            {current.dependsOn
-                              .map((id) => board.tasks.find((item) => item.id === id)?.title)
-                              .join("、")}
+                          <h3 className="font-medium">{current.title}</h3>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {current.team}
+                            {assigned?.id !== selected.id ? ` · ${assigned?.title}` : ""}
                           </p>
-                        )}
-                        {current.stage === "ready" && (
-                          <form
-                            className="grid gap-3 md:grid-cols-3"
-                            onSubmit={(event) =>
-                              formSubmit(event, (form) => {
-                                const [instance, model] = value(form, "model").split("\t");
-                                const provider = providers.find(
-                                  (item) => item.instanceId === instance,
-                                )!;
-                                return {
-                                  ...metadata(),
-                                  type: "task.launch",
-                                  actorWorkspaceId,
-                                  taskId: current.id,
-                                  baseRef: value(form, "baseRef"),
-                                  modelSelection: {
-                                    instanceId: provider.instanceId,
-                                    model: model!,
-                                  },
-                                };
-                              })
-                            }
-                          >
-                            <Field title="执行 Agent 与模型">
-                              <select required name="model" className={selectClass}>
-                                <option value="">选择已连接的 Agent</option>
-                                {providers
-                                  .filter(
-                                    (item) =>
-                                      item.enabled &&
-                                      item.installed &&
-                                      item.status !== "error" &&
-                                      (item.supportedRuntimeModes?.includes("approval-required") ??
-                                        true),
-                                  )
-                                  .flatMap((provider) =>
-                                    provider.models.map((model) => (
-                                      <option
-                                        key={`${provider.instanceId}:${model.slug}`}
-                                        value={`${provider.instanceId}\t${model.slug}`}
-                                      >
-                                        {provider.instanceId} · {model.name}
-                                      </option>
-                                    )),
-                                  )}
-                              </select>
-                            </Field>
-                            <Field title="新工作区的基础分支">
-                              <Input required name="baseRef" defaultValue="HEAD" />
-                            </Field>
-                            <div className="flex items-end">
-                              <Button type="submit" disabled={busy || !canOperate}>
-                                启动任务
-                              </Button>
-                            </div>
-                          </form>
-                        )}
-                        {latest &&
-                          latest.launchState !== "started" &&
-                          current.stage === "working" && (
-                            <Button
-                              variant="outline"
-                              disabled={busy || !canOperate}
-                              onClick={() =>
-                                void submit({
-                                  commandId: latest.id,
-                                  expectedRevision: board.revision,
-                                  type: "task.launch",
-                                  actorWorkspaceId,
-                                  taskId: current.id,
-                                  modelSelection: latest.modelSelection,
-                                  baseRef: latest.baseRef,
-                                })
-                              }
-                            >
-                              核对并重试原启动请求
-                            </Button>
-                          )}
-                        {current.stage === "working" &&
-                          execution !== undefined &&
-                          ["completed", "failed", "interrupted", "cancelled"].includes(
-                            execution.status,
-                          ) &&
-                          latest && (
-                            <form
-                              className="grid gap-3"
-                              onSubmit={(event) =>
-                                formSubmit(event, (form) => ({
-                                  ...metadata(),
-                                  type: "task.deliver",
-                                  actorWorkspaceId,
-                                  taskId: current.id,
-                                  attemptId: latest.id,
-                                  summary: value(form, "summary"),
-                                  paths: lines(form.get("paths")),
-                                  checks: lines(form.get("checks")),
-                                  remaining: lines(form.get("remaining")),
-                                }))
-                              }
-                            >
-                              <Field title="交付说明">
-                                <Textarea required name="summary" />
-                              </Field>
-                              <Field title="产物相对路径（每行一个）">
-                                <Textarea required name="paths" placeholder="src/login.ts" />
-                              </Field>
-                              <Field title="实际验证与结果（每行一条）">
-                                <Textarea name="checks" />
-                              </Field>
-                              <Field title="未完成事项（每行一条）">
-                                <Textarea name="remaining" />
-                              </Field>
-                              <div>
-                                <Button type="submit" disabled={busy || !canOperate}>
-                                  固定产物并提交交付
-                                </Button>
-                              </div>
-                            </form>
-                          )}
-                        {delivery && (
-                          <DeliveryView
-                            environmentId={environmentId}
-                            delivery={delivery}
-                            board={board}
-                          />
-                        )}
-                        {current.stage === "review" && !pending && (
+                        </div>
+                        <Badge
+                          variant={
+                            current.stage === "done"
+                              ? "success"
+                              : current.stage === "blocked"
+                                ? "warning"
+                                : "secondary"
+                          }
+                        >
+                          {stages[current.stage]}
+                        </Badge>
+                      </div>
+                      {current.requirement !== current.title && (
+                        <p
+                          className={`mt-3 whitespace-pre-wrap text-sm ${expanded === current.id ? "" : "line-clamp-2 text-muted-foreground"}`}
+                        >
+                          {current.requirement}
+                        </p>
+                      )}
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        {execution ? (
                           <>
-                            <form
-                              className="grid gap-3 md:grid-cols-2"
-                              onSubmit={(event) =>
-                                formSubmit(event, (form) => ({
-                                  ...metadata(),
-                                  type: "handoff.offer",
-                                  actorWorkspaceId,
-                                  taskId: current.id,
-                                  toWorkspaceId: value(form, "target"),
-                                  toTeam: value(form, "team"),
-                                  nextSteps: value(form, "next"),
-                                }))
-                              }
+                            <span>
+                              执行：{executionLabels[execution.status] ?? execution.status}
+                            </span>
+                            <Link
+                              to="/$environmentId/$threadId"
+                              params={{ environmentId, threadId: execution.threadId }}
+                              className="underline"
                             >
-                              <Field title="接棒工作区">
-                                <select
-                                  name="target"
-                                  className={selectClass}
-                                  defaultValue={current.assignedWorkspaceId}
-                                >
-                                  {board.workspaces
-                                    .filter((item) => descendants.has(item.id))
-                                    .map((item) => (
-                                      <option key={item.id} value={item.id}>
-                                        {item.title}
-                                      </option>
-                                    ))}
+                              查看进展
+                            </Link>
+                          </>
+                        ) : (
+                          <span>尚未执行</span>
+                        )}
+                        {delivery && <span>交付：{delivery.artifacts.length} 份产物</span>}
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setExpanded(expanded === current.id ? null : current.id)}
+                        >
+                          {expanded === current.id
+                            ? "收起"
+                            : current.stage === "review"
+                              ? "查看成果"
+                              : pending
+                                ? "处理接棒"
+                                : "查看详情"}
+                        </Button>
+                      </div>
+                      {current.stage === "ready" && (
+                        <form
+                          className="grid gap-3 sm:grid-cols-[1fr_auto]"
+                          onSubmit={(event) =>
+                            formSubmit(event, (form) => {
+                              const [instance, model] = value(form, "model").split("\t");
+                              const provider = providers.find(
+                                (item) => item.instanceId === instance,
+                              )!;
+                              return {
+                                ...metadata(),
+                                type: "task.launch",
+                                actorWorkspaceId,
+                                taskId: current.id,
+                                baseRef: value(form, "baseRef"),
+                                modelSelection: {
+                                  instanceId: provider.instanceId,
+                                  model: model!,
+                                },
+                              };
+                            })
+                          }
+                        >
+                          <AgentChoice providers={providers} />
+                          <div className="flex items-end">
+                            <Button type="submit" disabled={busy || !canOperate}>
+                              开始
+                            </Button>
+                          </div>
+                        </form>
+                      )}
+
+                      {expanded === current.id && (
+                        <div className="mt-5 grid gap-5 border-t pt-5">
+                          <div>
+                            <p className="mb-2 text-sm font-medium">验收条件</p>
+                            <ul className="list-inside list-disc text-sm text-muted-foreground">
+                              {current.criteria.map((criterion) => (
+                                <li key={criterion}>{criterion}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          {current.dependsOn.length > 0 && (
+                            <p className="text-sm">
+                              前序：
+                              {current.dependsOn
+                                .map((id) => board.tasks.find((item) => item.id === id)?.title)
+                                .join("、")}
+                            </p>
+                          )}
+                          {latest &&
+                            latest.launchState !== "started" &&
+                            current.stage === "working" && (
+                              <Button
+                                variant="outline"
+                                disabled={busy || !canOperate}
+                                onClick={() =>
+                                  void submit({
+                                    commandId: latest.id,
+                                    expectedRevision: board.revision,
+                                    type: "task.launch",
+                                    actorWorkspaceId,
+                                    taskId: current.id,
+                                    modelSelection: latest.modelSelection,
+                                    baseRef: latest.baseRef,
+                                  })
+                                }
+                              >
+                                重试启动
+                              </Button>
+                            )}
+                          {current.stage === "working" &&
+                            execution !== undefined &&
+                            ["completed", "failed", "interrupted", "cancelled"].includes(
+                              execution.status,
+                            ) &&
+                            latest && (
+                              <form
+                                className="grid gap-3"
+                                onSubmit={(event) =>
+                                  formSubmit(event, (form) => ({
+                                    ...metadata(),
+                                    type: "task.deliver",
+                                    actorWorkspaceId,
+                                    taskId: current.id,
+                                    attemptId: latest.id,
+                                    summary: value(form, "summary"),
+                                    paths: lines(form.get("paths")),
+                                    checks: lines(form.get("checks")),
+                                    remaining: lines(form.get("remaining")),
+                                  }))
+                                }
+                              >
+                                <Field title="交付说明">
+                                  <Textarea required name="summary" />
+                                </Field>
+                                <Field title="产物相对路径（每行一个）">
+                                  <Textarea required name="paths" placeholder="src/login.ts" />
+                                </Field>
+                                <Field title="实际验证与结果（每行一条）">
+                                  <Textarea name="checks" />
+                                </Field>
+                                <Field title="未完成事项（每行一条）">
+                                  <Textarea name="remaining" />
+                                </Field>
+                                <div>
+                                  <Button type="submit" disabled={busy || !canOperate}>
+                                    固定产物并提交交付
+                                  </Button>
+                                </div>
+                              </form>
+                            )}
+                          {delivery && (
+                            <DeliveryView
+                              environmentId={environmentId}
+                              delivery={delivery}
+                              board={board}
+                            />
+                          )}
+                          {current.stage === "review" && !pending && (
+                            <>
+                              <form
+                                className="grid gap-3 md:grid-cols-2"
+                                onSubmit={(event) =>
+                                  formSubmit(event, (form) => ({
+                                    ...metadata(),
+                                    type: "handoff.offer",
+                                    actorWorkspaceId,
+                                    taskId: current.id,
+                                    toWorkspaceId: value(form, "target"),
+                                    toTeam: value(form, "team") || "下一棒团队",
+                                    nextSteps: value(form, "next"),
+                                  }))
+                                }
+                              >
+                                <Field title="接下来做什么？">
+                                  <Textarea
+                                    required
+                                    name="next"
+                                    placeholder="例如：基于当前成果补充测试"
+                                  />
+                                </Field>
+                                <details className="md:col-span-2">
+                                  <summary className="cursor-pointer text-sm text-muted-foreground">
+                                    交给其他团队
+                                  </summary>
+                                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                    <Field title="所属目标">
+                                      <select
+                                        name="target"
+                                        className={selectClass}
+                                        defaultValue={current.assignedWorkspaceId}
+                                      >
+                                        {board.workspaces
+                                          .filter((item) => descendants.has(item.id))
+                                          .map((item) => (
+                                            <option key={item.id} value={item.id}>
+                                              {item.title}
+                                            </option>
+                                          ))}
+                                      </select>
+                                    </Field>
+                                    <Field title="接棒团队">
+                                      <Input name="team" placeholder="下一棒团队" />
+                                    </Field>
+                                  </div>
+                                </details>
+                                <div className="flex items-end">
+                                  <Button
+                                    type="submit"
+                                    variant="outline"
+                                    disabled={busy || !canOperate}
+                                  >
+                                    交给下一棒
+                                  </Button>
+                                </div>
+                              </form>
+                              <form
+                                className="grid gap-3 rounded-lg border p-4"
+                                onSubmit={(event) =>
+                                  formSubmit(event, (form) => ({
+                                    ...metadata(),
+                                    type: "delivery.accept",
+                                    actorWorkspaceId,
+                                    taskId: current.id,
+                                    deliveryId: delivery!.id,
+                                    accepted: value(form, "verdict") === "accept",
+                                    criteriaConfirmed: current.criteria.map((_, index) =>
+                                      form.has(`criterion-${index}`),
+                                    ),
+                                    reason:
+                                      value(form, "reason") ||
+                                      (value(form, "verdict") === "accept"
+                                        ? "已检查成果，验收通过"
+                                        : "请继续完善"),
+                                  }))
+                                }
+                              >
+                                <p className="text-sm font-medium">确认成果</p>
+                                {current.criteria.map((criterion, index) => (
+                                  <label key={criterion} className="flex gap-2 text-sm">
+                                    <input type="checkbox" name={`criterion-${index}`} />
+                                    {criterion}
+                                  </label>
+                                ))}
+                                <Field title="补充意见（选填）">
+                                  <Input name="reason" />
+                                </Field>
+                                <select name="verdict" className={selectClass}>
+                                  <option value="reject">需要继续完善</option>
+                                  <option value="accept">验收通过</option>
                                 </select>
-                              </Field>
-                              <Field title="接棒团队">
-                                <Input required name="team" />
-                              </Field>
-                              <Field title="从哪里继续、避免重做什么">
-                                <Textarea required name="next" />
-                              </Field>
-                              <div className="flex items-end">
+                                <div>
+                                  <Button type="submit" disabled={busy || !canOperate}>
+                                    确认
+                                  </Button>
+                                </div>
+                              </form>
+                            </>
+                          )}
+                          {pending && (
+                            <div className="grid gap-3 rounded-lg border p-4">
+                              <p className="text-sm font-medium">等待 {pending.toTeam} 接棒</p>
+                              <p className="whitespace-pre-wrap text-sm">{pending.nextSteps}</p>
+                              <form
+                                className="grid gap-3"
+                                onSubmit={(event) =>
+                                  formSubmit(event, (form) => ({
+                                    ...metadata(),
+                                    type: "handoff.respond",
+                                    actorWorkspaceId,
+                                    handoffId: pending.id,
+                                    accept: value(form, "decision") === "accept",
+                                    receipt: value(form, "receipt"),
+                                  }))
+                                }
+                              >
+                                <Field title="接收回执：已拿到哪些产物、下一步是什么">
+                                  <Textarea required name="receipt" />
+                                </Field>
+                                <select name="decision" className={selectClass}>
+                                  <option value="accept">确认接收</option>
+                                  <option value="reject">拒绝接收</option>
+                                </select>
+                                <div className="flex gap-2">
+                                  <Button type="submit" disabled={busy || !canOperate}>
+                                    提交回执
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={busy || !canOperate}
+                                    onClick={() =>
+                                      void submit({
+                                        ...metadata(),
+                                        type: "handoff.revoke",
+                                        actorWorkspaceId,
+                                        handoffId: pending.id,
+                                      })
+                                    }
+                                  >
+                                    撤销交接
+                                  </Button>
+                                </div>
+                              </form>
+                            </div>
+                          )}
+                          {!execution?.active && !pending && (
+                            <details>
+                              <summary className="cursor-pointer text-sm text-muted-foreground">
+                                调整任务状态
+                              </summary>
+                              <form
+                                className="flex flex-wrap items-end gap-3"
+                                onSubmit={(event) =>
+                                  formSubmit(event, (form) => ({
+                                    ...metadata(),
+                                    type: "task.stage",
+                                    actorWorkspaceId,
+                                    taskId: current.id,
+                                    stage: value(form, "stage") as
+                                      | "ready"
+                                      | "blocked"
+                                      | "cancelled",
+                                    reason: value(form, "reason"),
+                                  }))
+                                }
+                              >
+                                <Field title="调整阶段">
+                                  <select name="stage" className={selectClass}>
+                                    <option value="ready">可开始 / 重试</option>
+                                    <option value="blocked">阻塞</option>
+                                    <option value="cancelled">取消</option>
+                                  </select>
+                                </Field>
+                                <Field title="原因">
+                                  <Input required name="reason" />
+                                </Field>
                                 <Button
                                   type="submit"
                                   variant="outline"
                                   disabled={busy || !canOperate}
                                 >
-                                  发起接棒
+                                  更新
                                 </Button>
-                              </div>
-                            </form>
-                            <form
-                              className="grid gap-3 rounded-lg border p-4"
-                              onSubmit={(event) =>
-                                formSubmit(event, (form) => ({
-                                  ...metadata(),
-                                  type: "delivery.accept",
-                                  actorWorkspaceId,
-                                  taskId: current.id,
-                                  deliveryId: delivery!.id,
-                                  accepted: value(form, "verdict") === "accept",
-                                  criteriaConfirmed: current.criteria.map((_, index) =>
-                                    form.has(`criterion-${index}`),
-                                  ),
-                                  reason: value(form, "reason"),
-                                }))
-                              }
-                            >
-                              <p className="text-sm font-medium">人工验收当前交付</p>
-                              {current.criteria.map((criterion, index) => (
-                                <label key={criterion} className="flex gap-2 text-sm">
-                                  <input type="checkbox" name={`criterion-${index}`} />
-                                  {criterion}
-                                </label>
-                              ))}
-                              <Field title="验收意见">
-                                <Input required name="reason" />
-                              </Field>
-                              <select name="verdict" className={selectClass}>
-                                <option value="reject">需要继续完善</option>
-                                <option value="accept">验收通过</option>
-                              </select>
-                              <div>
-                                <Button type="submit" disabled={busy || !canOperate}>
-                                  记录验收
-                                </Button>
-                              </div>
-                            </form>
-                          </>
-                        )}
-                        {pending && (
-                          <div className="grid gap-3 rounded-lg border p-4">
-                            <p className="text-sm font-medium">等待 {pending.toTeam} 接棒</p>
-                            <p className="whitespace-pre-wrap text-sm">{pending.nextSteps}</p>
-                            <form
-                              className="grid gap-3"
-                              onSubmit={(event) =>
-                                formSubmit(event, (form) => ({
-                                  ...metadata(),
-                                  type: "handoff.respond",
-                                  actorWorkspaceId,
-                                  handoffId: pending.id,
-                                  accept: value(form, "decision") === "accept",
-                                  receipt: value(form, "receipt"),
-                                }))
-                              }
-                            >
-                              <Field title="接收回执：已拿到哪些产物、下一步是什么">
-                                <Textarea required name="receipt" />
-                              </Field>
-                              <select name="decision" className={selectClass}>
-                                <option value="accept">确认接收</option>
-                                <option value="reject">拒绝接收</option>
-                              </select>
-                              <div className="flex gap-2">
-                                <Button type="submit" disabled={busy || !canOperate}>
-                                  提交回执
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  disabled={busy || !canOperate}
-                                  onClick={() =>
-                                    void submit({
-                                      ...metadata(),
-                                      type: "handoff.revoke",
-                                      actorWorkspaceId,
-                                      handoffId: pending.id,
-                                    })
-                                  }
-                                >
-                                  撤销交接
-                                </Button>
-                              </div>
-                            </form>
-                          </div>
-                        )}
-                        {!execution?.active && !pending && (
-                          <form
-                            className="flex flex-wrap items-end gap-3"
-                            onSubmit={(event) =>
-                              formSubmit(event, (form) => ({
-                                ...metadata(),
-                                type: "task.stage",
-                                actorWorkspaceId,
-                                taskId: current.id,
-                                stage: value(form, "stage") as "ready" | "blocked" | "cancelled",
-                                reason: value(form, "reason"),
-                              }))
-                            }
-                          >
-                            <Field title="调整阶段">
-                              <select name="stage" className={selectClass}>
-                                <option value="ready">可开始 / 重试</option>
-                                <option value="blocked">阻塞</option>
-                                <option value="cancelled">取消</option>
-                              </select>
-                            </Field>
-                            <Field title="原因">
-                              <Input required name="reason" />
-                            </Field>
-                            <Button type="submit" variant="outline" disabled={busy || !canOperate}>
-                              更新
-                            </Button>
-                          </form>
-                        )}
-                        {current.attempts.length > 0 && (
-                          <details>
-                            <summary className="cursor-pointer text-sm font-medium">
-                              执行与交付历史
-                            </summary>
-                            <div className="mt-3 grid gap-3">
-                              {current.attempts.map((attempt) => (
-                                <div key={attempt.id} className="rounded-lg border p-3 text-xs">
-                                  <p>
-                                    {attempt.team} · {attempt.modelSelection.instanceId} ·{" "}
-                                    {attempt.modelSelection.model}
-                                  </p>
-                                  <p className="mt-1 text-muted-foreground">
-                                    {attempt.createdAt} · 第 {attempt.generation + 1} 轮分工
-                                  </p>
-                                  <Link
-                                    to="/$environmentId/$threadId"
-                                    params={{ environmentId, threadId: attempt.threadId }}
-                                    className="mt-2 inline-block underline"
-                                  >
-                                    查看这次执行
-                                  </Link>
-                                </div>
-                              ))}
-                              {board.deliveries
-                                .filter(
-                                  (item) =>
-                                    item.taskId === current.id && item.id !== current.deliveryId,
-                                )
-                                .map((item) => (
-                                  <DeliveryView
-                                    key={item.id}
-                                    environmentId={environmentId}
-                                    delivery={item}
-                                    board={board}
-                                  />
+                              </form>
+                            </details>
+                          )}
+                          {current.attempts.length > 0 && (
+                            <details>
+                              <summary className="cursor-pointer text-sm font-medium">
+                                执行与交付历史
+                              </summary>
+                              <div className="mt-3 grid gap-3">
+                                {current.attempts.map((attempt) => (
+                                  <div key={attempt.id} className="rounded-lg border p-3 text-xs">
+                                    <p>
+                                      {attempt.team} · {attempt.modelSelection.instanceId} ·{" "}
+                                      {attempt.modelSelection.model}
+                                    </p>
+                                    <p className="mt-1 text-muted-foreground">
+                                      {attempt.createdAt} · 第 {attempt.generation + 1} 轮分工
+                                    </p>
+                                    <Link
+                                      to="/$environmentId/$threadId"
+                                      params={{ environmentId, threadId: attempt.threadId }}
+                                      className="mt-2 inline-block underline"
+                                    >
+                                      查看这次执行
+                                    </Link>
+                                  </div>
                                 ))}
-                            </div>
-                          </details>
-                        )}
-                        {current.attempts.length > 0 && (
-                          <details>
-                            <summary className="cursor-pointer text-sm text-muted-foreground">
-                              执行时实际交给 Agent 的简报
-                            </summary>
-                            <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-3 text-xs">
-                              {latest?.briefing}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
+                                {board.deliveries
+                                  .filter(
+                                    (item) =>
+                                      item.taskId === current.id && item.id !== current.deliveryId,
+                                  )
+                                  .map((item) => (
+                                    <DeliveryView
+                                      key={item.id}
+                                      environmentId={environmentId}
+                                      delivery={item}
+                                      board={board}
+                                    />
+                                  ))}
+                              </div>
+                            </details>
+                          )}
+                          {current.attempts.length > 0 && (
+                            <details>
+                              <summary className="cursor-pointer text-sm text-muted-foreground">
+                                查看交接简报
+                              </summary>
+                              <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-3 text-xs">
+                                {latest?.briefing}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
             </>
           ) : (
             <div className="rounded-xl border border-dashed p-8">
               <p className="font-medium">从一个总体目标开始</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                先在 T3 添加项目，再将它注册为工作区，指定 owner 和目标。
+                选择一个项目，写下你想达成的目标。
               </p>
             </div>
           )}
         </section>
       </div>
+    </>
+  );
+}
+
+function AgentChoice({ providers }: { providers: readonly ServerProvider[] }) {
+  const available = providers.filter(
+    (item) =>
+      item.enabled &&
+      item.installed &&
+      item.status !== "error" &&
+      item.models.length > 0 &&
+      (item.supportedRuntimeModes?.includes("approval-required") ?? true),
+  );
+  const [chosen, setChosen] = useState<string | null>(null);
+  const selected = available.find((item) => item.instanceId === chosen) ?? available[0];
+  return (
+    <>
+      <Field title="交给谁做">
+        <select
+          required
+          aria-label="交给谁做"
+          className={selectClass}
+          value={selected?.instanceId ?? ""}
+          onChange={(event) => setChosen(event.target.value)}
+        >
+          {!selected && <option value="">暂无可用团队，请在设置中连接</option>}
+          {available.map((provider) => (
+            <option key={provider.instanceId} value={provider.instanceId}>
+              {provider.displayName}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <details className="sm:col-span-2 sm:row-start-2">
+        <summary className="cursor-pointer text-xs text-muted-foreground">高级设置</summary>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <Field title="模型">
+            <select
+              key={selected?.instanceId ?? "none"}
+              required
+              name="model"
+              className={selectClass}
+              defaultValue={
+                selected
+                  ? `${selected.instanceId}\t${(selected.models.find((model) => model.isDefault) ?? selected.models[0])!.slug}`
+                  : ""
+              }
+            >
+              {!selected && <option value="">请先连接团队</option>}
+              {selected?.models.map((model) => (
+                <option key={model.slug} value={`${selected.instanceId}\t${model.slug}`}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field title="基础分支">
+            <Input required name="baseRef" defaultValue="HEAD" />
+          </Field>
+        </div>
+      </details>
     </>
   );
 }
@@ -884,11 +1007,9 @@ function DeliveryView({
   const [preview, setPreview] = useState<string | null>(null);
   return (
     <div className="grid gap-2 rounded-lg border p-4">
-      <h4 className="text-sm font-medium">固定交付版本</h4>
+      <h4 className="text-sm font-medium">本次成果</h4>
       {delivery.executionStatus && (
-        <p className="text-xs text-muted-foreground">
-          来源执行：{executionLabels[delivery.executionStatus]}。是否完成任务由验收决定。
-        </p>
+        <p className="text-xs text-muted-foreground">{executionLabels[delivery.executionStatus]}</p>
       )}
       <p className="whitespace-pre-wrap text-sm">{delivery.summary}</p>
       <ul className="grid gap-2">
@@ -901,9 +1022,12 @@ function DeliveryView({
             >
               {artifact.path}
             </button>{" "}
-            · {artifact.bytes} bytes
-            <br />
-            <span className="text-muted-foreground">SHA-256 {artifact.digest}</span>
+            <details className="mt-1 text-muted-foreground">
+              <summary className="cursor-pointer">文件信息</summary>
+              <p>
+                {artifact.bytes} bytes · SHA-256 {artifact.digest}
+              </p>
+            </details>
           </li>
         ))}
       </ul>
@@ -952,7 +1076,7 @@ function ArtifactPreview({
         download={artifact.path.split("/").at(-1)}
         href={`data:application/octet-stream;base64,${base64}`}
       >
-        下载这个固定版本
+        下载文件
       </a>
       <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-3 text-xs">
         {text}
